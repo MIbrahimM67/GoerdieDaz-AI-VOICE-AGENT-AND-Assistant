@@ -92,43 +92,50 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     """Login with email + password. Returns JWT access token."""
-    result = await db.execute(select(User).where(User.email == body.email))
-    user = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(User).where(User.email == body.email))
+        user = result.scalar_one_or_none()
 
-    if not user or not verify_password(body.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+        if not user or not verify_password(body.password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+            )
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is deactivated",
+            )
+
+        access_token, expires_in = create_access_token(
+            user_id=str(user.id),
+            username=user.username,
+            persona_id=user.current_persona_id,
         )
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is deactivated",
+        refresh_token = create_refresh_token(str(user.id))
+
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            samesite="none",
+            secure=True,
+            max_age=7 * 24 * 3600,
         )
 
-    access_token, expires_in = create_access_token(
-        user_id=str(user.id),
-        username=user.username,
-        persona_id=user.current_persona_id,
-    )
-    refresh_token = create_refresh_token(str(user.id))
-
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        samesite="lax",
-        max_age=7 * 24 * 3600,
-    )
-
-    logger.info(f"User logged in: {user.username}")
-    return TokenResponse(
-        access_token=access_token,
-        expires_in=expires_in,
-        user_id=str(user.id),
-        username=user.username,
-        current_persona_id=user.current_persona_id,
-    )
+        logger.info(f"User logged in: {user.username}")
+        return TokenResponse(
+            access_token=access_token,
+            expires_in=expires_in,
+            user_id=str(user.id),
+            username=user.username,
+            current_persona_id=user.current_persona_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login failed with error: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Login error: {type(e).__name__}: {str(e)}")
 
 
 @router.get("/me", response_model=UserProfile)
