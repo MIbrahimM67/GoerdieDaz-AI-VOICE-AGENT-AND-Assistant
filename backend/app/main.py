@@ -62,13 +62,24 @@ app = FastAPI(
 )
 
 # CORS — allow frontend origin
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+origins = settings.allowed_origins_list
+if origins == ["*"]:
+    # Wildcard with credentials requires reflecting the origin
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # ── REST Routers ──────────────────────────────────────────────────────────
 app.include_router(auth.router)
