@@ -45,7 +45,30 @@ async def lifespan(app: FastAPI):
         raise
 
     logger.info("GeordieDaz ready ✓")
+
+    # Start keep-alive ping for Render free tier
+    keep_alive_task = None
+    import os
+    render_url = os.getenv("RENDER_EXTERNAL_URL") or "https://goerdiedaz-ai-voice-agent-and-assistant.onrender.com"
+    
+    async def keep_alive():
+        import httpx
+        import asyncio
+        async with httpx.AsyncClient() as client:
+            while True:
+                await asyncio.sleep(600)  # 10 minutes
+                try:
+                    logger.info(f"Keep-alive ping to {render_url}/health")
+                    await client.get(f"{render_url}/health")
+                except Exception as e:
+                    logger.warning(f"Keep-alive ping failed: {e}")
+
+    keep_alive_task = asyncio.create_task(keep_alive())
+
     yield
+
+    if keep_alive_task:
+        keep_alive_task.cancel()
 
     # ── Shutdown ─────────────────────────────────────────────────────────
     logger.info("GeordieDaz shutting down...")
