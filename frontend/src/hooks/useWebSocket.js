@@ -6,7 +6,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 import useAppStore from '../stores/appStore';
 
-const WS_BASE = `ws://${window.location.host}/ws`;
+const WS_BASE = import.meta.env.VITE_WS_URL
+  ? import.meta.env.VITE_WS_URL
+  : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 const MAX_RECONNECT_DELAY = 10000;
 
 export function useWebSocket({ userId, token, onAudioChunk, onBargeIn }) {

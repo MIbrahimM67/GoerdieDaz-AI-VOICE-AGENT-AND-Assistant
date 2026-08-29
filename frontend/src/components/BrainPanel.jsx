@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Brain, RefreshCw, Database, Clock, Sparkles, User, ShieldCheck } from 'lucide-react';
 import useAppStore from '../stores/appStore';
 
-const API_BASE = '';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const CATEGORY_STYLES = {
   semantic:   { label: 'FACT',       color: 'var(--cyan-core)', bg: 'var(--cyan-dim)' },
