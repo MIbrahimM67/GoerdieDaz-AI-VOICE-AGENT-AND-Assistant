@@ -6,8 +6,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 import useAppStore from '../stores/appStore';
 
-const WS_BASE = import.meta.env.VITE_WS_URL
-  ? import.meta.env.VITE_WS_URL
+const wsEnv = import.meta.env.VITE_WS_URL;
+const WS_BASE = wsEnv
+  ? (wsEnv.endsWith('/ws') ? wsEnv : `${wsEnv.replace(/\/$/, '')}/ws`)
   : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 const MAX_RECONNECT_DELAY = 10000;
 
