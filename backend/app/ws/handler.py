@@ -176,25 +176,20 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
 
         # TESTED WORKING: gpt-realtime-mini accepts ONLY these params.
         # voice set via URL param, transcription via nested audio object.
-        # When ElevenLabs is active, set OpenAI to text-only mode
         if self._use_elevenlabs:
+            # When ElevenLabs is active, set OpenAI to text-only mode
             session_config = {
                 "type": "session.update",
                 "session": {
-                    "type": "realtime",
-                    "modalities": ["text", "audio"],
+                    "modalities": ["text"],
                     "instructions": enhanced_prompt,
-                    "audio": {
-                        "input": {
-                            "transcription": {
-                                "model": "gpt-4o-transcribe",
-                                "language": "en"
-                            }
-                        },
-                        "output": {
-                            "voice": voice_id  # Still needed for modality, but we won't use the audio
-                        }
+                    "input_audio_format": "pcm16",
+                    "output_audio_format": "pcm16",
+                    "input_audio_transcription": {
+                        "model": "whisper-1"
                     },
+                    # No voice or server_vad for ElevenLabs mode (we handle audio manually)
+                    "turn_detection": None,
                     "tools": self._get_tools(),
                     "tool_choice": "auto",
                 },
@@ -207,21 +202,23 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
             await self._elevenlabs_tts.connect()
             logger.info(f"ElevenLabs TTS active: voice={settings.elevenlabs_voice_id}")
         else:
+            # Full native OpenAI Realtime mode
             session_config = {
                 "type": "session.update",
                 "session": {
-                    "type": "realtime",
+                    "modalities": ["text", "audio"],
                     "instructions": enhanced_prompt,
-                    "audio": {
-                        "input": {
-                            "transcription": {
-                                "model": "gpt-4o-transcribe",
-                                "language": "en"
-                            }
-                        },
-                        "output": {
-                            "voice": voice_id
-                        }
+                    "voice": voice_id,
+                    "input_audio_format": "pcm16",
+                    "output_audio_format": "pcm16",
+                    "input_audio_transcription": {
+                        "model": "whisper-1"
+                    },
+                    "turn_detection": {
+                        "type": "server_vad",
+                        "threshold": 0.5,
+                        "prefix_padding_ms": 300,
+                        "silence_duration_ms": 200
                     },
                     "tools": self._get_tools(),
                     "tool_choice": "auto",
