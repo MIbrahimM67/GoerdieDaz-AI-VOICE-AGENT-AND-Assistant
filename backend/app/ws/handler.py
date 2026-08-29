@@ -730,7 +730,7 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
             logger.error(f"Session initialisation failed for {self.user_id}: {e}")
             await self.send_to_client({
                 "type": "error",
-                "message": "Failed to initialise voice session. Please try again.",
+                "message": f"Failed to initialise voice session: {str(e)}",
             })
             raise
 
