@@ -137,7 +137,6 @@ class RealtimeSessionHandler:
             f"{OPENAI_REALTIME_URL}&voice={voice_id}",
             additional_headers={
                 "Authorization": f"Bearer {settings.openai_api_key}",
-                "OpenAI-Beta": "realtime=v1",
             },
             ping_interval=20,
             ping_timeout=10,
