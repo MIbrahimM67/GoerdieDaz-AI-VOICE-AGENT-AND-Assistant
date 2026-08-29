@@ -237,9 +237,48 @@ a {
 
 @media (max-width: 860px) {
   .jarvis-viewport {
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    height: auto !important;
+    min-height: calc(100vh - var(--topbar-h));
+    padding-bottom: 2rem;
+  }
+
+  /* Adjust topbar for mobile */
+  .jarvis-topbar {
+    height: auto !important;
+    flex-wrap: wrap !important;
+    padding: 0.75rem !important;
+    justify-content: center !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Force the side panels to have fixed height on mobile instead of inheriting 100% */
+  .jarvis-viewport > .hud-card {
+    height: 450px !important;
+    flex: none !important;
+    width: 100% !important;
+  }
+
+  /* Ensure center stage (voice orb) takes a sensible minimum height */
+  .jarvis-viewport > section {
+    height: auto !important;
+    min-height: 400px !important;
+    width: 100% !important;
+    flex: none !important;
+  }
+
+  /* Scale down the Voice Orb slightly for mobile */
+  .jarvis-viewport > section > div > button {
+    transform: scale(0.85);
+  }
+}
+
+@media (max-width: 480px) {
+  /* Hide the subtitle in the topbar to save space */
+  .jarvis-topbar span:nth-child(2) {
+    font-size: 0.5rem !important;
   }
 }
 
