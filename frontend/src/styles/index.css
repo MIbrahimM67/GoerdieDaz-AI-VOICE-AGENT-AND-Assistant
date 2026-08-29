@@ -1,0 +1,357 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Orbitron:wght@500;700;800;900&family=Rajdhani:wght@500;600;700&display=swap');
+
+/* ─── JARVIS HUD Design System & Tokens ───────────────────────── */
+:root {
+  --font-hud: 'Orbitron', -apple-system, sans-serif;
+  --font-ui: 'Rajdhani', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Canvas & Obsidian Backgrounds */
+  --bg-space:     #02050e;
+  --bg-deep:      #040a18;
+  --bg-panel:     rgba(5, 13, 30, 0.75);
+  --bg-panel-hi:  rgba(8, 20, 48, 0.85);
+  --bg-card:      rgba(10, 25, 55, 0.55);
+  --bg-hover:     rgba(0, 240, 255, 0.08);
+
+  /* Hologram & Neon Cyan (Default Friendly Mode) */
+  --cyan-core:    #00f0ff;
+  --cyan-bright:  #00d4ff;
+  --cyan-dim:     rgba(0, 240, 255, 0.12);
+  --cyan-glow:    rgba(0, 240, 255, 0.35);
+  --cyan-laser:   rgba(0, 240, 255, 0.85);
+
+  /* Active Accent (Dynamic via Persona) */
+  --accent:       var(--cyan-core);
+  --accent-bright:var(--cyan-bright);
+  --accent-dim:   var(--cyan-dim);
+  --accent-glow:  var(--cyan-glow);
+  --accent-laser: var(--cyan-laser);
+
+  /* HUD Borders & Tech Lines */
+  --border-hud:      rgba(0, 240, 255, 0.22);
+  --border-hud-subtle: rgba(0, 240, 255, 0.10);
+  --border-hud-bright: rgba(0, 240, 255, 0.55);
+  --border-hud-corner: #00f0ff;
+
+  /* Typography & Readout */
+  --text-laser:   #ffffff;
+  --text-hi:      #e0f7fa;
+  --text-body:    #94a9c9;
+  --text-muted:   #50678a;
+  --text-faint:   rgba(0, 240, 255, 0.25);
+
+  /* Status Colors */
+  --green:        #10b981;
+  --green-glow:   rgba(16, 185, 129, 0.4);
+  --red:          #ef4444;
+  --red-glow:     rgba(239, 68, 68, 0.4);
+  --blue:         #3b82f6;
+  --amber:        #ff9e00;
+
+  /* Layout Dimensions */
+  --topbar-h:     56px;
+  --panel-width:  340px;
+
+  /* Radii */
+  --r-xs:   4px;
+  --r-sm:   8px;
+  --r-md:   14px;
+  --r-lg:   20px;
+  --r-pill: 9999px;
+
+  /* Transitions */
+  --t-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --t-mid:  240ms cubic-bezier(0.4, 0, 0.2, 1);
+  --t-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Driving Persona Palette Overrides ────────────────────────── */
+body.persona-driving {
+  --accent:       #ff9e00;
+  --accent-bright:#ffb703;
+  --accent-dim:   rgba(255, 158, 0, 0.12);
+  --accent-glow:  rgba(255, 158, 0, 0.40);
+  --accent-laser: rgba(255, 158, 0, 0.90);
+  --border-hud:   rgba(255, 158, 0, 0.28);
+  --border-hud-subtle: rgba(255, 158, 0, 0.12);
+  --border-hud-bright: rgba(255, 158, 0, 0.65);
+  --border-hud-corner: #ff9e00;
+}
+
+/* ─── Base & Background Grid ─────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-space);
+  color: var(--text-body);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Cybernetic Grid & Atmospheric Lighting */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, rgba(0, 240, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 240, 255, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90vw;
+  height: 80vh;
+  background: radial-gradient(circle at center, var(--accent-dim) 0%, rgba(2, 5, 14, 0) 70%);
+  pointer-events: none;
+  z-index: 0;
+  transition: background var(--t-slow);
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ─── HUD Glassmorphism Card Utility ─────────────────────────── */
+.hud-card {
+  background: var(--bg-panel);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-hud);
+  box-shadow: 
+    0 0 30px rgba(0, 0, 0, 0.7),
+    inset 0 0 20px rgba(0, 240, 255, 0.03);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Tech Corner Accents for HUD Panels */
+.hud-card::before, .hud-card::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.hud-card::before {
+  top: 0;
+  left: 0;
+  border-top: 2px solid var(--border-hud-corner);
+  border-left: 2px solid var(--border-hud-corner);
+}
+
+.hud-card::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 2px solid var(--border-hud-corner);
+  border-right: 2px solid var(--border-hud-corner);
+}
+
+/* ─── Scrollbars ─────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-hud);
+  border-radius: var(--r-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* ─── JARVIS 3-Column Layout ─────────────────────────────────── */
+.jarvis-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1;
+  overflow: hidden;
+}
+
+/* Command Topbar */
+.jarvis-topbar {
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  background: rgba(3, 8, 20, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-hud);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+/* Main 3-Panel Content Area */
+.jarvis-viewport {
+  flex: 1;
+  display: grid;
+  grid-template-columns: var(--panel-width) 1fr var(--panel-width);
+  gap: 1.25rem;
+  padding: 1.25rem;
+  height: calc(100vh - var(--topbar-h));
+  overflow: hidden;
+}
+
+@media (max-width: 1100px) {
+  .jarvis-viewport {
+    grid-template-columns: 280px 1fr 280px;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+}
+
+@media (max-width: 860px) {
+  .jarvis-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+}
+
+/* ─── Keyframe Animations ────────────────────────────────────── */
+@keyframes ringRotateClockwise {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes ringRotateCounter {
+  from { transform: translate(-50%, -50%) rotate(360deg); }
+  to   { transform: translate(-50%, -50%) rotate(0deg); }
+}
+
+@keyframes laserPulse {
+  0%, 100% {
+    box-shadow: 0 0 15px var(--accent-glow), inset 0 0 15px var(--accent-glow);
+    opacity: 0.8;
+  }
+  50% {
+    box-shadow: 0 0 35px var(--accent-glow), inset 0 0 25px var(--accent-glow);
+    opacity: 1;
+  }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(1000%); }
+}
+
+@keyframes floatGentle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* ─── Typography Utility Classes ─────────────────────────────── */
+.font-hud {
+  font-family: var(--font-hud);
+  letter-spacing: 0.08em;
+}
+
+.text-glow {
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+.hud-title {
+  font-family: var(--font-hud);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-laser);
+}
+
+.hud-tag {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--border-hud);
+  padding: 2px 6px;
+  border-radius: var(--r-xs);
+  text-transform: uppercase;
+}
+
+/* ─── Status Indicator Dots ──────────────────────────────────── */
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all var(--t-mid);
+}
+.dot--connected  { background: var(--green); box-shadow: 0 0 10px var(--green-glow); }
+.dot--listening  { background: var(--green); box-shadow: 0 0 12px var(--green-glow); animation: laserPulse 1.2s infinite; }
+.dot--speaking   { background: var(--cyan-core); box-shadow: 0 0 14px var(--cyan-glow); animation: laserPulse 0.8s infinite; }
+.dot--processing { background: var(--amber); box-shadow: 0 0 12px rgba(255,158,0,0.5); animation: laserPulse 1s infinite; }
+.dot--idle       { background: var(--text-muted); }
+.dot--error      { background: var(--red); box-shadow: 0 0 10px var(--red-glow); }
+
+/* ─── Tool Activity HUD Ribbon ───────────────────────────────── */
+.tool-activity {
+  display: flex;
+  justify-content: center;
+  padding: 6px 16px;
+  animation: floatGentle 3s ease-in-out infinite;
+}
+
+.tool-activity-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  background: rgba(4, 12, 28, 0.9);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-pill);
+  box-shadow: 0 0 20px var(--accent-dim);
+  position: relative;
+  overflow: hidden;
+}
+
+.tool-activity-icon {
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+  filter: drop-shadow(0 0 6px var(--accent));
+}
+
+.tool-activity-label {
+  font-family: var(--font-hud);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-laser);
+}
