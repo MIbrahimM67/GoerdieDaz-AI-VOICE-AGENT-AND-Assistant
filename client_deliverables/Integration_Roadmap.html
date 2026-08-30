@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GeordieDaz — Integration Roadmap & Connected Services</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { margin: 1.5cm 2cm; size: A4; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; color: #1e293b; line-height: 1.65; font-size: 11pt; background: #fff; padding: 2rem; max-width: 900px; margin: 0 auto; }
+  
+  .cover { text-align: center; padding: 3rem 0 2rem; border-bottom: 3px solid #0f172a; margin-bottom: 2rem; }
+  .cover h1 { font-size: 28pt; font-weight: 800; color: #0f172a; letter-spacing: -0.02em; }
+  .cover .subtitle { font-size: 13pt; color: #64748b; margin-top: 0.5rem; }
+  .cover .date { font-size: 10pt; color: #94a3b8; margin-top: 1rem; }
+  .cover .badge { display: inline-block; background: #00f0ff; color: #0f172a; padding: 4px 14px; border-radius: 20px; font-size: 9pt; font-weight: 700; margin-top: 1rem; letter-spacing: 0.05em; }
+
+  h2 { font-size: 16pt; font-weight: 700; color: #0f172a; margin: 2rem 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 2px solid #e2e8f0; }
+  h3 { font-size: 12pt; font-weight: 700; color: #334155; margin: 1.25rem 0 0.5rem; }
+  p { margin: 0.5rem 0; color: #334155; }
+  
+  table { width: 100%; border-collapse: collapse; margin: 0.75rem 0 1rem; font-size: 10pt; }
+  th { background: #0f172a; color: #fff; text-align: left; padding: 8px 12px; font-weight: 600; }
+  td { padding: 7px 12px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) td { background: #f8fafc; }
+
+  .status-done { color: #059669; font-weight: 700; }
+  .status-blocked { color: #dc2626; font-weight: 700; }
+  
+  .arch-box { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin: 0.75rem 0; font-family: 'Courier New', monospace; font-size: 9.5pt; line-height: 1.8; color: #334155; }
+  
+  .note { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 6px 6px 0; font-size: 10pt; }
+  .note strong { color: #92400e; }
+  
+  .timeline { display: inline-block; background: #dbeafe; color: #1e40af; padding: 2px 10px; border-radius: 12px; font-size: 9pt; font-weight: 600; }
+  
+  ul { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.25rem 0; color: #475569; }
+  
+  .section-divider { border: none; border-top: 1px solid #e2e8f0; margin: 2rem 0; }
+
+  .footer { text-align: center; font-size: 8pt; color: #94a3b8; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>GeordieDaz AI</h1>
+  <div class="subtitle">Integration Roadmap & Connected Services Plan</div>
+  <div class="badge">CONFIDENTIAL — CLIENT REVIEW</div>
+  <div class="date">Prepared: 30 August 2026</div>
+</div>
+
+<!-- PHASE 1 -->
+<h2>Phase 1 — Core Voice AI <span class="status-done">✅ COMPLETE</span></h2>
+
+<table>
+  <tr><th>Feature</th><th>Status</th><th>Details</th></tr>
+  <tr><td>Real-time voice conversation</td><td class="status-done">✅ Built</td><td>OpenAI Realtime API with WebSocket bridge</td></tr>
+  <tr><td>Alan Robson Geordie persona</td><td class="status-done">✅ Built</td><td>Custom system prompts with thick dialect</td></tr>
+  <tr><td>Driving Mode persona</td><td class="status-done">✅ Built</td><td>High-energy sarcastic co-pilot</td></tr>
+  <tr><td>Persistent memory (cross-session)</td><td class="status-done">✅ Built</td><td>PostgreSQL + pgvector + Redis</td></tr>
+  <tr><td>JARVIS HUD interface</td><td class="status-done">✅ Built</td><td>3-panel holographic UI with canvas voice orb</td></tr>
+  <tr><td>User authentication</td><td class="status-done">✅ Built</td><td>JWT tokens with bcrypt hashing</td></tr>
+  <tr><td>ElevenLabs voice clone</td><td class="status-done">✅ Built</td><td>Alan Robson voice clone created</td></tr>
+  <tr><td>Cloud deployment</td><td class="status-done">✅ Live</td><td>Backend on Render, Frontend on Vercel</td></tr>
+</table>
+
+<div class="note">
+  <strong>⚠️ Currently blocked by:</strong> OpenAI API credit balance (£0 remaining). Once credits are topped up, the full voice experience works end-to-end immediately.
+</div>
+
+<hr class="section-divider">
+
+<!-- PLANNED INTEGRATIONS (Phases 2-5 merged) -->
+<h2>Planned Integrations — Roadmap</h2>
+
+<h3>📧 Proton Mail</h3>
+<table>
+  <tr><th>Capability</th><th>Example Voice Command</th></tr>
+  <tr><td>Read unread count</td><td>"You've got 3 new emails, pet."</td></tr>
+  <tr><td>Summarize emails</td><td>"One from your accountant about tax returns, two from Amazon."</td></tr>
+  <tr><td>Compose &amp; send replies</td><td>"Send a reply saying 'Cheers, I'll look at it tomorrow.'"</td></tr>
+  <tr><td>Search inbox</td><td>"Find that email from Dave about the meeting."</td></tr>
+</table>
+<p><strong>How:</strong> Connects via Proton Mail Bridge (official IMAP/SMTP gateway). Emails parsed &amp; summarized by LLM, responses spoken back.</p>
+
+<h3>📱 Social Media — X (Twitter) &amp; Instagram</h3>
+<table>
+  <tr><th>Platform</th><th>Capability</th><th>Example</th></tr>
+  <tr><td>X / Twitter</td><td>Read mentions &amp; DMs</td><td>"You've got 2 new mentions on X."</td></tr>
+  <tr><td>X / Twitter</td><td>Post tweets</td><td>"Post: Howay the lads! NUFC forever."</td></tr>
+  <tr><td>X / Twitter</td><td>Search trending</td><td>"What's trending in Newcastle?"</td></tr>
+  <tr><td>Instagram</td><td>Check DMs &amp; notifications</td><td>"You've got 1 new DM on Instagram."</td></tr>
+  <tr><td>Instagram</td><td>Engagement stats</td><td>"Your last post got 150 likes."</td></tr>
+</table>
+<p><strong>How:</strong> Twitter API v2 &amp; Instagram Graph API (OAuth 2.0). User authenticates once, tokens stored securely.</p>
+
+<h3>📈 Crypto &amp; Investment Tracking</h3>
+<table>
+  <tr><th>Capability</th><th>Example Voice Command</th></tr>
+  <tr><td>Live crypto portfolio</td><td>"Your Bitcoin's at £42,150 — up 2.1% today, canny!"</td></tr>
+  <tr><td>Price alerts</td><td>"Bitcoin just hit £45,000, bonny lad!"</td></tr>
+  <tr><td>Stock tracking</td><td>"Your Tesla shares are up 3.2% this week."</td></tr>
+  <tr><td>Portfolio summary</td><td>"Overall portfolio is up 2.3% this month."</td></tr>
+</table>
+<p><strong>How:</strong> CoinGecko / CoinMarketCap for crypto, Alpha Vantage / Yahoo Finance for stocks. Prices cached in Redis, refreshed every 5 minutes.</p>
+
+<h3>🔮 Future Integrations</h3>
+<table>
+  <tr><th>Integration</th><th>Purpose</th><th>API</th></tr>
+  <tr><td>Google Calendar</td><td>"What's on me schedule today?"</td><td>Google Calendar API</td></tr>
+  <tr><td>Spotify</td><td>"Play some Geordie anthems"</td><td>Spotify Web API</td></tr>
+  <tr><td>Weather</td><td>"What's the weather in Newcastle?"</td><td>OpenWeatherMap</td></tr>
+  <tr><td>News</td><td>"What's the latest Toon news?"</td><td>NewsAPI / RSS</td></tr>
+  <tr><td>Smart Home</td><td>"Turn off the living room lights"</td><td>Home Assistant / Hue</td></tr>
+  <tr><td>WhatsApp</td><td>"Read my latest WhatsApp messages"</td><td>WhatsApp Business API</td></tr>
+</table>
+
+<h3>Plugin Architecture</h3>
+<p>Every integration follows the same modular pattern:</p>
+<ol style="margin: 0.5rem 0 0.5rem 1.5rem; color: #475569;">
+  <li><strong>Service file</strong> — handles API communication</li>
+  <li><strong>Realtime tool</strong> — GeordieDaz can call it mid-conversation by voice</li>
+  <li><strong>UI card</strong> — shows live data in the Connected Services panel</li>
+  <li><strong>Memory integration</strong> — remembers your preferences across sessions</li>
+</ol>
+
+<hr class="section-divider">
+
+<!-- MEMORY -->
+<h2>Memory Persistence — Architecture</h2>
+<p>GeordieDaz uses a <strong>3-tier memory system</strong> that persists permanently across sessions, devices, and time:</p>
+
+<table>
+  <tr><th>Tier</th><th>Storage</th><th>What</th><th>Persistence</th></tr>
+  <tr><td><strong>Working Memory</strong></td><td>Redis</td><td>Last 20 conversation turns</td><td>24hr TTL, survives restarts</td></tr>
+  <tr><td><strong>Semantic Memory</strong></td><td>PostgreSQL + pgvector</td><td>Extracted facts (name, car, preferences)</td><td>Permanent — forever</td></tr>
+  <tr><td><strong>Episodic Memory</strong></td><td>PostgreSQL</td><td>Session summaries</td><td>Permanent — forever</td></tr>
+</table>
+
+<h3>Cross-Session Example</h3>
+<p><strong>Session 1:</strong> User says "I drive a red Ferrari" → fact stored permanently in PostgreSQL with vector embedding</p>
+<p><strong>Session 2 (days later, different device):</strong> User says "What car do I drive?" → vector search finds the fact → GeordieDaz responds: "You drive a red Ferrari, bonny lad!"</p>
+
+<h3>Real-Time Memory Tools</h3>
+<table>
+  <tr><th>Tool</th><th>Purpose</th><th>Example Trigger</th></tr>
+  <tr><td>search_memory</td><td>Search stored facts</td><td>"What car do I drive?"</td></tr>
+  <tr><td>store_fact</td><td>Store a new fact</td><td>"Remember I have a dog called Max"</td></tr>
+  <tr><td>search_history</td><td>Search past sessions</td><td>"What did we talk about last time?"</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- HANDOFF -->
+<h2>Handoff Confirmation</h2>
+<p>All of the following will be included in the final handoff:</p>
+
+<table>
+  <tr><th>Deliverable</th><th>Included</th></tr>
+  <tr><td>Complete source code (frontend + backend)</td><td class="status-done">✅ Yes</td></tr>
+  <tr><td>All system prompts &amp; persona configurations</td><td class="status-done">✅ Yes</td></tr>
+  <tr><td>Memory extraction &amp; retrieval logic</td><td class="status-done">✅ Yes</td></tr>
+  <tr><td>LangGraph agent pipeline (7 nodes)</td><td class="status-done">✅ Yes</td></tr>
+  <tr><td>Database schemas &amp; migrations (Alembic)</td><td class="status-done">✅ Yes</td></tr>
+  <tr><td>Docker Compose for local development</td><td class="status-done">✅ Yes</td></tr>
+  <tr><td>Deployment configs (Render + Vercel)</td><td class="status-done">✅ Yes</td></tr>
+  <tr><td>Environment variable templates</td><td class="status-done">✅ Yes</td></tr>
+  <tr><td>API documentation (FastAPI /docs)</td><td class="status-done">✅ Yes</td></tr>
+  <tr><td>Character Bible (Alan Robson guide)</td><td class="status-done">✅ Yes</td></tr>
+  <tr><td>28 automated tests</td><td class="status-done">✅ Yes</td></tr>
+  <tr><td>README with setup instructions</td><td class="status-done">✅ Yes</td></tr>
+</table>
+
+<div class="footer">
+  GeordieDaz AI — Confidential Client Document — 30 August 2026
+</div>
+
+</body>
+</html>

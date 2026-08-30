@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OpenAI API Status Check</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+  .card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 16px;
+    padding: 2.5rem;
+    max-width: 640px;
+    width: 100%;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 2rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid #334155;
+  }
+  .header-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+  }
+  .header-text h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+  .header-text p {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  .field {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.875rem 0;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  }
+  .field:last-child { border-bottom: none; }
+  .field-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .field-value {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    text-align: right;
+  }
+  .field-value.error {
+    color: #ef4444;
+  }
+  .field-value.key {
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    background: rgba(15, 23, 42, 0.6);
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+  }
+
+  .error-box {
+    margin-top: 1.5rem;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+  .error-box h3 {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #ef4444;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .error-box p {
+    font-size: 0.8125rem;
+    color: #fca5a5;
+    line-height: 1.6;
+  }
+  .error-code {
+    display: inline-block;
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+  }
+
+  .footer {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #334155;
+    font-size: 0.7rem;
+    color: #475569;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div class="header-icon">⚠️</div>
+      <div class="header-text">
+        <h1>OpenAI API — Credit Balance Exhausted</h1>
+        <p>GeordieDaz Project API Status Check</p>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="field-label">Project</span>
+      <span class="field-value">GeordieDaz AI Voice Assistant</span>
+    </div>
+    <div class="field">
+      <span class="field-label">API Key</span>
+      <span class="field-value key">sk-proj-d7-s••••••••••Q5IA</span>
+    </div>
+    <div class="field">
+      <span class="field-label">Test Endpoint</span>
+      <span class="field-value">gpt-4o-mini (cheapest model)</span>
+    </div>
+    <div class="field">
+      <span class="field-label">Checked At</span>
+      <span class="field-value">30 August 2026, 02:23 AM</span>
+    </div>
+    <div class="field">
+      <span class="field-label">Result</span>
+      <span class="field-value error">❌ BLOCKED — No Credits</span>
+    </div>
+
+    <div class="error-box">
+      <h3>⛔ OpenAI Response</h3>
+      <p>
+        "You have no credits remaining. Add credits to continue using the API
+        at https://platform.openai.com/settings/organization/billing/."
+      </p>
+      <br>
+      <span class="error-code">error_type: insufficient_quota</span>
+      <span class="error-code" style="margin-left: 6px;">code: credit_balance_exhausted</span>
+    </div>
+
+    <div style="margin-top: 1.25rem; background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 1.25rem; font-family: 'Courier New', monospace; font-size: 0.75rem; color: #94a3b8; line-height: 1.7; overflow-x: auto;">
+      <div style="font-family: Inter, sans-serif; font-size: 0.7rem; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem;">Raw API Response from OpenAI</div>
+<span style="color: #64748b;">{</span>
+  <span style="color: #7dd3fc;">"error"</span>: <span style="color: #64748b;">{</span>
+    <span style="color: #7dd3fc;">"message"</span>: <span style="color: #fca5a5;">"You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/."</span>,
+    <span style="color: #7dd3fc;">"type"</span>: <span style="color: #fca5a5;">"insufficient_quota"</span>,
+    <span style="color: #7dd3fc;">"param"</span>: <span style="color: #94a3b8;">null</span>,
+    <span style="color: #7dd3fc;">"code"</span>: <span style="color: #fca5a5;">"credit_balance_exhausted"</span>
+  <span style="color: #64748b;">}</span>
+<span style="color: #64748b;">}</span>
+    </div>
+
+    <div class="footer">
+      This check was performed directly against the OpenAI API using the GeordieDaz project's API key.
+      All application code is deployed and functional — only blocked by billing.
+    </div>
+  </div>
+</body>
+</html>

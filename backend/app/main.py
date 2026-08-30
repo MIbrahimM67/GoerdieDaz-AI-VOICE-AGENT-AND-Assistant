@@ -1,6 +1,9 @@
 """
 GeordieDaz — FastAPI Application Entry Point
 """
+# Load .env FIRST so LANGCHAIN_* vars are in os.environ for LangSmith tracing
+from dotenv import load_dotenv
+load_dotenv()
 import asyncio
 import logging
 import os

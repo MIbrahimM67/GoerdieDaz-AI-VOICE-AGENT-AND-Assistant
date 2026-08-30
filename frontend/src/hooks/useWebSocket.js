@@ -29,7 +29,6 @@ export function useWebSocket({ userId, token, onAudioChunk, onBargeIn }) {
     setError,
     setActiveToolCall,
     clearActiveToolCall,
-    addTelemetryEvent,
   } = useAppStore();
 
   // Accumulate full AI response for turn logging
@@ -155,13 +154,6 @@ export function useWebSocket({ userId, token, onAudioChunk, onBargeIn }) {
           setActiveToolCall(msg.tool);
         } else {
           clearActiveToolCall();
-        }
-        break;
-
-      case 'telemetry_event':
-        if (msg.telemetry) {
-          console.log('[Telemetry WS Live Event]', msg.telemetry);
-          addTelemetryEvent(msg.telemetry);
         }
         break;
 

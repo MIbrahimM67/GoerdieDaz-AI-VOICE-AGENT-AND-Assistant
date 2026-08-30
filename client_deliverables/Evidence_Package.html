@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GeordieDaz — Technical Evidence Package</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { margin: 1.5cm 2cm; size: A4; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; color: #1e293b; line-height: 1.65; font-size: 11pt; background: #fff; padding: 2rem; max-width: 900px; margin: 0 auto; }
+  
+  .cover { text-align: center; padding: 3rem 0 2rem; border-bottom: 3px solid #0f172a; margin-bottom: 2rem; }
+  .cover h1 { font-size: 26pt; font-weight: 800; color: #0f172a; }
+  .cover .subtitle { font-size: 13pt; color: #64748b; margin-top: 0.5rem; }
+  .cover .date { font-size: 10pt; color: #94a3b8; margin-top: 1rem; }
+  .cover .badge { display: inline-block; background: #00f0ff; color: #0f172a; padding: 4px 14px; border-radius: 20px; font-size: 9pt; font-weight: 700; margin-top: 1rem; letter-spacing: 0.05em; }
+
+  h2 { font-size: 16pt; font-weight: 700; color: #0f172a; margin: 2rem 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 2px solid #e2e8f0; }
+  h3 { font-size: 12pt; font-weight: 700; color: #334155; margin: 1.25rem 0 0.5rem; }
+  p { margin: 0.5rem 0; color: #334155; }
+
+  table { width: 100%; border-collapse: collapse; margin: 0.75rem 0 1rem; font-size: 10pt; }
+  th { background: #0f172a; color: #fff; text-align: left; padding: 8px 12px; font-weight: 600; }
+  td { padding: 7px 12px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) td { background: #f8fafc; }
+
+  .error-card { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 1.25rem; margin: 1rem 0; }
+  .error-card h3 { color: #991b1b; margin-top: 0; }
+  
+  .json-block { background: #0f172a; border-radius: 8px; padding: 1.25rem; font-family: 'Courier New', monospace; font-size: 9.5pt; color: #94a3b8; line-height: 1.8; margin: 0.75rem 0; overflow-x: auto; }
+  .json-key { color: #7dd3fc; }
+  .json-val { color: #fca5a5; }
+  .json-null { color: #94a3b8; }
+
+  .info-box { background: #f0f9ff; border-left: 4px solid #0284c7; padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 6px 6px 0; font-size: 10pt; }
+  
+  .code-block { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; font-family: 'Courier New', monospace; font-size: 9pt; line-height: 1.6; margin: 0.75rem 0; white-space: pre; }
+  
+  ul { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.25rem 0; color: #475569; }
+  
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 2rem 0; }
+  
+  .status-done { color: #059669; font-weight: 700; }
+
+  .footer { text-align: center; font-size: 8pt; color: #94a3b8; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>GeordieDaz AI</h1>
+  <div class="subtitle">Technical Evidence Package</div>
+  <div class="badge">CONFIDENTIAL — CLIENT REVIEW</div>
+  <div class="date">Prepared: 30 August 2026</div>
+</div>
+
+<!-- SECTION 1: QUOTA ERROR -->
+<h2>1. OpenAI API — Credit Balance Exhausted</h2>
+
+<p>The following error was captured by sending a direct API request to OpenAI using the GeordieDaz project's API key on <strong>30 August 2026 at 02:23 AM</strong>.</p>
+
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Project</td><td>GeordieDaz AI Voice Assistant</td></tr>
+  <tr><td>API Key</td><td><code>sk-proj-d7-s••••••••••Q5IA</code></td></tr>
+  <tr><td>Test Endpoint</td><td>gpt-4o-mini (cheapest available model)</td></tr>
+  <tr><td>Result</td><td style="color: #dc2626; font-weight: 700;">❌ BLOCKED — No Credits Remaining</td></tr>
+</table>
+
+<h3>Raw API Response from OpenAI</h3>
+<div class="json-block">
+{
+  <span class="json-key">"error"</span>: {
+    <span class="json-key">"message"</span>: <span class="json-val">"You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/."</span>,
+    <span class="json-key">"type"</span>: <span class="json-val">"insufficient_quota"</span>,
+    <span class="json-key">"param"</span>: <span class="json-null">null</span>,
+    <span class="json-key">"code"</span>: <span class="json-val">"credit_balance_exhausted"</span>
+  }
+}
+</div>
+
+<h3>What This Means</h3>
+<ul>
+  <li>The API key is <strong>valid</strong> — OpenAI recognises and accepts it.</li>
+  <li>The account has a <strong>negative balance</strong> which blocks all API calls.</li>
+  <li>Every component of GeordieDaz (voice, memory, embeddings) requires active credits.</li>
+  <li>The application code is fully deployed and operational — it is <strong>only</strong> blocked by the billing issue.</li>
+</ul>
+
+<h3>Application Error Flow</h3>
+<table>
+  <tr><th>Step</th><th>Action</th><th>Result</th></tr>
+  <tr><td>1</td><td>User clicks "START SERVER" → Login</td><td class="status-done">✅ Success</td></tr>
+  <tr><td>2</td><td>WebSocket connects to backend</td><td class="status-done">✅ Success</td></tr>
+  <tr><td>3</td><td>LangGraph pre-turn pipeline runs</td><td class="status-done">✅ Success</td></tr>
+  <tr><td>4</td><td>Backend connects to OpenAI Realtime API</td><td style="color: #dc2626; font-weight: 700;">❌ Rejected (insufficient_quota)</td></tr>
+  <tr><td>5</td><td>Error sent to frontend</td><td>"Failed to initialise voice session"</td></tr>
+</table>
+
+<div class="info-box">
+  <strong>Resolution:</strong> Add credits at <a href="https://platform.openai.com/settings/organization/billing/">platform.openai.com/billing</a>. The application will work immediately once the balance is positive.
+</div>
+
+<hr>
+
+<!-- SECTION 2: LIKELY USAGE -->
+<h2>2. Likely Credit Usage Breakdown</h2>
+
+<p>The -$17.27 balance was most likely consumed by the following API services during development and testing:</p>
+
+<table>
+  <tr><th>Service</th><th>Cost</th><th>Usage</th></tr>
+  <tr><td>OpenAI Realtime API (Voice)</td><td>~$0.06/min audio</td><td>Voice session testing, WebSocket reconnect loops during debugging</td></tr>
+  <tr><td>text-embedding-3-small</td><td>~$0.02/1M tokens</td><td>Memory vector embeddings (each stored fact generates an embedding)</td></tr>
+  <tr><td>GPT-4o (Memory Extraction)</td><td>~$2.50/1M input tokens</td><td>Extracting facts from conversation turns after each dialogue</td></tr>
+  <tr><td>GPT-4o-transcribe (Whisper)</td><td>~$0.006/min</td><td>Speech-to-text transcription during voice sessions</td></tr>
+</table>
+
+<div class="info-box">
+  <strong>Note:</strong> During debugging, repeated WebSocket reconnection loops (each attempt opens a new Realtime API session) likely consumed credits rapidly. This has been fixed — the application now handles errors gracefully without reconnect storms.
+</div>
+
+<hr>
+
+<!-- SECTION 3: SYSTEM ARCHITECTURE -->
+<h2>3. System Architecture Overview</h2>
+
+<table>
+  <tr><th>Component</th><th>Technology</th><th>Hosting</th></tr>
+  <tr><td>Frontend (JARVIS HUD)</td><td>React + Vite + Canvas API</td><td>Vercel (free tier)</td></tr>
+  <tr><td>Backend API</td><td>FastAPI + Python</td><td>Render (web service)</td></tr>
+  <tr><td>Voice Engine</td><td>OpenAI Realtime API (WebSocket)</td><td>OpenAI Cloud</td></tr>
+  <tr><td>Voice Clone</td><td>ElevenLabs (Alan Robson clone)</td><td>ElevenLabs Cloud</td></tr>
+  <tr><td>Database</td><td>PostgreSQL + pgvector</td><td>Render (managed)</td></tr>
+  <tr><td>Cache / Working Memory</td><td>Redis</td><td>Render (managed)</td></tr>
+  <tr><td>Agent Pipeline</td><td>LangGraph (7 nodes)</td><td>Backend (in-process)</td></tr>
+  <tr><td>Authentication</td><td>JWT + bcrypt</td><td>Backend (in-process)</td></tr>
+</table>
+
+<h3>Repository Structure</h3>
+<div class="code-block">geordiedaz/
+├── backend/
+│   ├── app/
+│   │   ├── agent/nodes/      ← LangGraph pipeline (7 nodes)
+│   │   ├── api/              ← REST endpoints (auth, memory, persona)
+│   │   ├── models/           ← SQLAlchemy ORM (User, Memory, Session)
+│   │   ├── services/         ← Business logic (memory, auth, TTS)
+│   │   ├── ws/               ← WebSocket handler (OpenAI bridge)
+│   │   ├── personas/         ← YAML persona configs
+│   │   └── middleware/       ← JWT auth middleware
+│   ├── alembic/              ← Database migrations
+│   ├── tests/                ← 28 automated tests
+│   └── requirements.txt
+├── frontend/
+│   ├── src/components/       ← React UI (JARVIS HUD)
+│   ├── src/hooks/            ← WebSocket &amp; Voice hooks
+│   └── src/stores/           ← Zustand state management
+├── docs/                     ← Character Bible
+├── docker-compose.yml
+└── README.md</div>
+
+<div class="footer">
+  GeordieDaz AI — Confidential Technical Evidence — 30 August 2026
+</div>
+
+</body>
+</html>
