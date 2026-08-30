@@ -64,6 +64,9 @@ MEMORY TOOLS — YOU MUST USE THESE:
    - Asks about a previous conversation ("what did we talk about last time?")
    - References past events ("where were we driving?", "what did we do last Friday?")
    - Asks about something that happened in an earlier session
+   - Uses TEMPORAL references like "yesterday", "last week", "3 days ago", "last Monday"
+   IMPORTANT: When the user asks about a specific day (e.g. "what did I do yesterday?"),
+   use the 'date' parameter with an ISO date like "2025-08-29" or relative term "yesterday".
    Do NOT say any filler — just call the tool silently.
 
 CRITICAL: If the user asks about themselves and you don't search_memory first, you are FAILING your job. Never say "I don't know" or "I don't have that information" without searching first.
@@ -153,6 +156,132 @@ class RealtimeSessionHandler:
             except Exception as e:
                 logger.error(f"Failed to send to OpenAI: {e}")
 
+    # ── Noise Rejection Gate ──────────────────────────────────────────────────
+
+    # Common Whisper noise transcription artefacts
+    _NOISE_PATTERNS = {
+        "[music]", "[noise]", "[laughter]", "[applause]", "[silence]",
+        "[inaudible]", "[blank_audio]", "[music playing]", "[background noise]",
+        "(inaudible)", "(music)", "(noise)", "(silence)", "(laughter)",
+        "...", "…", "♪", "♫", "thank you.", "thanks for watching.",
+        "bye.", "bye bye.", "goodbye.", "you", "hmm", "hm", "uh",
+        "um", "ah", "oh", "eh", "mhm", "mm", "mmm", "uhh", "umm",
+        "ahh", "ohh", "huh", "ha", "haha",
+    }
+
+    def _is_valid_speech(self, transcript: str) -> bool:
+        """
+        Multi-layer noise rejection for car/phone deployment.
+        Returns True only if the transcript looks like genuine human speech
+        that warrants an AI response.
+
+        Rejects:
+        - Empty / whitespace-only transcripts
+        - Very short transcripts (< 2 chars after stripping)
+        - Known Whisper noise artefacts ([music], [noise], etc.)
+        - Transcripts that are only punctuation or repeated single characters
+        - Single meaningless syllables (uh, um, hmm, etc.)
+        """
+        if not transcript:
+            return False
+
+        cleaned = transcript.strip()
+
+        # Layer 1: Too short to be meaningful speech
+        if len(cleaned) < 2:
+            return False
+
+        # Layer 2: Known Whisper noise transcription artefacts
+        lower = cleaned.lower().strip(".,!? ")
+        if lower in self._NOISE_PATTERNS:
+            return False
+
+        # Layer 3: Transcript is only punctuation / special characters
+        import re
+        alpha_content = re.sub(r'[^a-zA-Z]', '', cleaned)
+        if len(alpha_content) < 2:
+            return False
+
+        # Layer 4: All same character repeated (e.g. "aaaa", "hhhh")
+        if len(set(alpha_content.lower())) <= 1 and len(alpha_content) < 6:
+            return False
+
+        # Layer 5: Very short single word that's just noise
+        words = cleaned.split()
+        if len(words) == 1 and len(alpha_content) <= 3:
+            # Single very short word — likely noise unless it's a real command
+            # Allow common single-word commands
+            real_words = {"yes", "no", "hey", "hi", "stop", "go", "play", "pause",
+                          "help", "what", "who", "why", "how", "when", "where", "next",
+                          "back", "home", "call", "end", "mute", "start", "okay", "sure",
+                          "yep", "nah", "nope", "bye", "thanks", "cool", "fine", "good",
+                          "bad", "left", "right", "open", "close", "on", "off", "map",
+                          "aye", "howay", "pet", "alreet", "canny"}
+            if lower not in real_words:
+                return False
+
+        # Passed all checks — this is valid speech
+        return True
+
+    # ── Temporal Date Reference Parser ────────────────────────────────────────
+
+    def _parse_date_reference(self, date_str: str) -> "date_type | None":
+        """
+        Parse a temporal date reference into a concrete date object.
+        Supports ISO format and relative references.
+        Returns None if parsing fails.
+        """
+        from datetime import date as date_cls, timedelta as td
+        import re
+
+        if not date_str:
+            return None
+
+        cleaned = date_str.strip().lower()
+        today = datetime.now(timezone.utc).date()
+
+        # ISO format: "2025-08-29"
+        try:
+            return date_cls.fromisoformat(cleaned)
+        except (ValueError, TypeError):
+            pass
+
+        # Relative references
+        if cleaned in ("today", "now"):
+            return today
+        if cleaned == "yesterday":
+            return today - td(days=1)
+        if cleaned == "day before yesterday":
+            return today - td(days=2)
+
+        # "N days ago"
+        match = re.match(r'(\d+)\s*days?\s*ago', cleaned)
+        if match:
+            return today - td(days=int(match.group(1)))
+
+        # "last week" → 7 days ago
+        if cleaned in ("last week", "a week ago"):
+            return today - td(days=7)
+
+        # "last monday", "last tuesday", etc.
+        day_names = {
+            "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+            "friday": 4, "saturday": 5, "sunday": 6,
+        }
+        match = re.match(r'last\s+(\w+)', cleaned)
+        if match:
+            day_name = match.group(1).lower()
+            if day_name in day_names:
+                target_weekday = day_names[day_name]
+                current_weekday = today.weekday()
+                days_back = (current_weekday - target_weekday) % 7
+                if days_back == 0:
+                    days_back = 7  # "last Monday" when today IS Monday means 7 days ago
+                return today - td(days=days_back)
+
+        logger.warning(f"Could not parse date reference: '{date_str}'")
+        return None
+
     def _get_tools(self):
         """Return the tool definitions for the OpenAI Realtime session."""
         return [
@@ -185,12 +314,13 @@ class RealtimeSessionHandler:
             {
                 "type": "function",
                 "name": "search_history",
-                "description": "Search past conversation sessions. Use when the user asks about previous conversations, e.g. 'what did we talk about last time?', 'where were we driving?', 'what did we do last Friday?'. Returns session summaries with dates.",
+                "description": "Search past conversation sessions and daily summaries. Use when the user asks about previous conversations or what happened on a specific day. For temporal queries like 'yesterday', 'last week', 'what did I do on Monday', set the 'date' parameter. Returns daily digests and session summaries grouped by date.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "What to search for in past conversations, e.g. 'driving', 'health discussion', 'last conversation'"},
-                        "days_back": {"type": "integer", "description": "How many days back to search. Default 30."}
+                        "query": {"type": "string", "description": "What to search for in past conversations, e.g. 'driving', 'health discussion', 'last conversation', 'everything'"},
+                        "days_back": {"type": "integer", "description": "How many days back to search. Default 30."},
+                        "date": {"type": "string", "description": "Specific date to search. ISO format 'YYYY-MM-DD' or relative like 'yesterday', 'today', '2 days ago', 'last monday'. When user asks 'what did I do yesterday?' use 'yesterday'."}
                     },
                     "required": ["query"]
                 }
@@ -255,9 +385,9 @@ class RealtimeSessionHandler:
                     },
                     "turn_detection": {
                         "type": "server_vad",
-                        "threshold": 0.5,
-                        "prefix_padding_ms": 300,
-                        "silence_duration_ms": 200
+                        "threshold": 0.65,
+                        "prefix_padding_ms": 400,
+                        "silence_duration_ms": 500
                     },
                     "tools": self._get_tools(),
                     "tool_choice": "auto",
@@ -318,6 +448,21 @@ class RealtimeSessionHandler:
                 # ── User speech transcript (input) ─────────────────────────
                 elif event_type == "conversation.item.input_audio_transcription.completed":
                     transcript = event.get("transcript", "")
+
+                    # ── Noise rejection gate ──────────────────────────────────
+                    if not self._is_valid_speech(transcript):
+                        logger.info(f"Noise rejected (user {self.user_id}): '{transcript[:80]}'")
+                        # Discard the audio buffer — don't let OpenAI respond to noise
+                        await self.send_to_openai({"type": "input_audio_buffer.clear"})
+                        await self.send_to_client({
+                            "type": "noise_rejected",
+                            "transcript": transcript,
+                        })
+                        # Reset voice state back to listening
+                        self.voice_state = VoiceState.LISTENING
+                        await self.send_to_client({"type": "state_change", "state": "listening"})
+                        continue
+
                     self._current_user_input = transcript
                     self._transcript_event.set()  # Signal that transcript is ready
                     await self.send_to_client({
@@ -549,7 +694,7 @@ class RealtimeSessionHandler:
                             await self.send_to_openai({"type": "response.create"})
 
                     elif name == "search_history":
-                        # Search past conversation sessions
+                        # Search past conversation sessions — date-aware with daily digest priority
                         await self.send_to_client({
                             "type": "tool_activity",
                             "tool": "search_history",
@@ -559,65 +704,137 @@ class RealtimeSessionHandler:
                             args = json.loads(arguments)
                             query = args.get("query", "")
                             days_back = int(args.get("days_back", 30))
-                            logger.info(f"AI searching history: query='{query}' days_back={days_back}")
+                            date_param = args.get("date", None)
+                            logger.info(f"AI searching history: query='{query}' days_back={days_back} date={date_param}")
 
                             from datetime import timedelta
 
-                            query_embedding = await embed_text(query)
-                            cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+                            # ── Parse temporal date reference ──────────────────
+                            target_date = None
+                            if date_param:
+                                target_date = self._parse_date_reference(date_param)
 
-                            # Search episodic session summaries
-                            result = await self.db.execute(
-                                sa_text("""
-                                    SELECT entity_key, content, updated_at,
-                                           1 - (embedding <=> :emb::vector) as similarity
-                                    FROM memories
-                                    WHERE user_id = :uid
-                                      AND memory_type = 'episodic'
-                                      AND updated_at >= :cutoff
-                                      AND 1 - (embedding <=> :emb::vector) > 0.3
-                                    ORDER BY similarity DESC
-                                    LIMIT 5
-                                """),
-                                {"uid": self.user_id, "emb": str(query_embedding), "cutoff": cutoff}
-                            )
-                            summaries = result.fetchall()
+                            output = ""
 
-                            # Emit live telemetry event for history search embedding
+                            # ── Strategy 1: Date-specific query → daily digest first ──
+                            if target_date:
+                                date_str = target_date.isoformat()
+                                logger.info(f"Date-aware history search for {date_str}")
+
+                                # First: try daily digest
+                                digest_result = await self.db.execute(
+                                    sa_text("""
+                                        SELECT entity_key, content, updated_at
+                                        FROM memories
+                                        WHERE user_id = CAST(:uid AS uuid)
+                                          AND entity_key = :digest_key
+                                    """),
+                                    {"uid": self.user_id, "digest_key": f"daily_digest.{date_str}"}
+                                )
+                                digest = digest_result.fetchone()
+
+                                if digest:
+                                    output += f"Daily summary for {date_str}:\n{digest.content}\n"
+                                else:
+                                    # No daily digest — fall back to individual session summaries for that date
+                                    session_result = await self.db.execute(
+                                        sa_text("""
+                                            SELECT entity_key, content, updated_at
+                                            FROM memories
+                                            WHERE user_id = CAST(:uid AS uuid)
+                                              AND memory_type = 'episodic'
+                                              AND entity_key LIKE :pattern
+                                            ORDER BY updated_at ASC
+                                        """),
+                                        {"uid": self.user_id, "pattern": f"session.{date_str}.%"}
+                                    )
+                                    sessions = session_result.fetchall()
+                                    if sessions:
+                                        output += f"Sessions from {date_str}:\n"
+                                        for i, s in enumerate(sessions):
+                                            output += f"  {i+1}. {s.content}\n"
+
+                                # Also search raw turns for that date for detail
+                                date_start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+                                date_end = date_start + timedelta(days=1)
+                                turn_result = await self.db.execute(
+                                    sa_text("""
+                                        SELECT role, content, created_at
+                                        FROM session_turns
+                                        WHERE user_id = CAST(:uid AS uuid)
+                                          AND created_at >= :start AND created_at < :end
+                                        ORDER BY created_at DESC
+                                        LIMIT 10
+                                    """),
+                                    {"uid": self.user_id, "start": date_start, "end": date_end}
+                                )
+                                turns = turn_result.fetchall()
+                                if turns:
+                                    output += f"\nConversation excerpts from {date_str}:\n"
+                                    for t in turns:
+                                        ts = str(t.created_at)[:16] if t.created_at else "unknown"
+                                        role = "User" if t.role == "user" else "GeordieDaz"
+                                        output += f"- [{ts}] {role}: {t.content[:150]}\n"
+
+                            # ── Strategy 2: General query → vector similarity search ──
+                            else:
+                                query_embedding = await embed_text(query)
+                                cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+
+                                # Prioritise daily digests, then individual sessions
+                                result = await self.db.execute(
+                                    sa_text("""
+                                        SELECT entity_key, content, updated_at,
+                                               1 - (embedding <=> :emb::vector) as similarity
+                                        FROM memories
+                                        WHERE user_id = CAST(:uid AS uuid)
+                                          AND memory_type = 'episodic'
+                                          AND updated_at >= :cutoff
+                                          AND 1 - (embedding <=> :emb::vector) > 0.3
+                                        ORDER BY
+                                          CASE WHEN entity_key LIKE 'daily_digest.%' THEN 0 ELSE 1 END,
+                                          similarity DESC
+                                        LIMIT 8
+                                    """),
+                                    {"uid": self.user_id, "emb": str(query_embedding), "cutoff": cutoff}
+                                )
+                                summaries = result.fetchall()
+
+                                if summaries:
+                                    output = "Past conversation history:\n"
+                                    for s in summaries:
+                                        date_str = str(s.updated_at)[:10] if s.updated_at else "unknown"
+                                        prefix = "📅 Daily" if s.entity_key and s.entity_key.startswith("daily_digest.") else "💬 Session"
+                                        output += f"- [{date_str}] {prefix}: {s.content}\n"
+
+                                # Also search raw turns for more detail
+                                turn_result = await self.db.execute(
+                                    sa_text("""
+                                        SELECT role, content, created_at
+                                        FROM session_turns
+                                        WHERE user_id = CAST(:uid AS uuid)
+                                          AND created_at >= :cutoff
+                                          AND content ILIKE :pattern
+                                        ORDER BY created_at DESC
+                                        LIMIT 10
+                                    """),
+                                    {"uid": self.user_id, "cutoff": cutoff, "pattern": f"%{query.split()[0] if query.split() else ''}%"}
+                                )
+                                turns = turn_result.fetchall()
+                                if turns:
+                                    output += "\nRelevant conversation excerpts:\n"
+                                    for t in turns:
+                                        date_str = str(t.created_at)[:16] if t.created_at else "unknown"
+                                        role = "User" if t.role == "user" else "GeordieDaz"
+                                        output += f"- [{date_str}] {role}: {t.content[:150]}\n"
+
+                            # Emit live telemetry
                             await self._emit_telemetry(
                                 service="embedding",
                                 operation="search_history_embed",
                                 tokens_in=len(query.split()) * 2,
-                                metadata={"query": query, "days_back": days_back, "summaries_found": len(summaries) if summaries else 0},
+                                metadata={"query": query, "days_back": days_back, "date": str(target_date) if target_date else None},
                             )
-
-                            output = ""
-                            if summaries:
-                                output = "Past session summaries:\n"
-                                for s in summaries:
-                                    date_str = str(s.updated_at)[:10] if s.updated_at else "unknown"
-                                    output += f"- [{date_str}] {s.content}\n"
-                            
-                            # Also search raw turns for more detail
-                            turn_result = await self.db.execute(
-                                sa_text("""
-                                    SELECT role, content, created_at
-                                    FROM session_turns
-                                    WHERE user_id = :uid
-                                      AND created_at >= :cutoff
-                                      AND content ILIKE :pattern
-                                    ORDER BY created_at DESC
-                                    LIMIT 10
-                                """),
-                                {"uid": self.user_id, "cutoff": cutoff, "pattern": f"%{query.split()[0] if query.split() else ''}%"}
-                            )
-                            turns = turn_result.fetchall()
-                            if turns:
-                                output += "\nRelevant conversation excerpts:\n"
-                                for t in turns:
-                                    date_str = str(t.created_at)[:16] if t.created_at else "unknown"
-                                    role = "User" if t.role == "user" else "GeordieDaz"
-                                    output += f"- [{date_str}] {role}: {t.content[:150]}\n"
 
                             if not output:
                                 output = "No matching conversation history found for the given query and time range."
@@ -760,6 +977,13 @@ class RealtimeSessionHandler:
         Called once when the WebSocket session is established.
         """
         try:
+            # Backfill any missing daily digests (lazy consolidation)
+            try:
+                from app.services.session_summary_service import ensure_previous_day_digest
+                await ensure_previous_day_digest(user_id=self.user_id, db=self.db)
+            except Exception as e:
+                logger.warning(f"Daily digest backfill failed (non-fatal): {e}")
+
             # Run pre-turn graph (loads session, retrieves memory, assembles context)
             state = await run_pre_turn(
                 user_id=self.user_id,
