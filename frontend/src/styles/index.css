@@ -706,22 +706,65 @@ a {
   to { transform: rotate(360deg); }
 }
 
-.usage-toggle-btn.active-tab {
+.usage-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.375rem 0.75rem;
+  background: rgba(4, 14, 32, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 6px;
+  color: #ffffff;
+  font-family: var(--font-hud);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.08);
+}
+
+.usage-toggle-btn svg {
   color: var(--cyan-core);
+  filter: drop-shadow(0 0 4px var(--cyan-core));
+}
+
+.usage-toggle-btn:hover {
+  background: rgba(0, 240, 255, 0.15);
   border-color: var(--cyan-core);
-  background: rgba(0, 240, 255, 0.12);
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+  color: #00f0ff;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+.usage-toggle-btn.active-tab {
+  color: #02050e;
+  background: var(--cyan-core);
+  border-color: var(--cyan-core);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.6);
+}
+
+.usage-toggle-btn.active-tab svg {
+  color: #02050e;
+  filter: none;
 }
 
 .live-counter-pill {
-  background: var(--cyan-core);
-  color: #02050e;
+  background: rgba(0, 240, 255, 0.2);
+  color: var(--cyan-core);
+  border: 1px solid var(--cyan-core);
   font-family: var(--font-mono);
   font-size: 0.6rem;
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 10px;
   animation: pulse 1.5s ease-in-out infinite;
+}
+
+.usage-toggle-btn.active-tab .live-counter-pill {
+  background: #02050e;
+  color: var(--cyan-core);
+  border-color: #02050e;
 }
 
 /* ═══════════════════════════════════════════════════════════════
