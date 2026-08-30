@@ -123,7 +123,20 @@ async def log_usage(
         logger.warning(f"Usage logging failed (non-fatal): {e}")
         await db.rollback()
 
-    return cost
+    created_iso = datetime.now(timezone.utc).isoformat()
+    return {
+        "id": str(log_entry.id),
+        "user_id": str(user_id),
+        "service": service,
+        "operation": operation,
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
+        "characters": characters,
+        "duration_seconds": duration_seconds,
+        "cost_usd": cost,
+        "metadata": metadata or {},
+        "created_at": created_iso,
+    }
 
 
 async def get_usage_summary(
@@ -163,23 +176,41 @@ async def get_usage_summary(
     services = {}
     total_cost = 0.0
     total_calls = 0
+    total_tokens_in = 0
+    total_tokens_out = 0
+    total_characters = 0
+    total_duration = 0.0
 
     for row in rows:
+        c_in = row.total_tokens_in or 0
+        c_out = row.total_tokens_out or 0
+        chars = row.total_characters or 0
+        dur = float(row.total_duration or 0)
+        c_cost = float(row.total_cost or 0)
+
         services[row.service] = {
             "call_count": row.call_count,
-            "tokens_in": row.total_tokens_in or 0,
-            "tokens_out": row.total_tokens_out or 0,
-            "characters": row.total_characters or 0,
-            "duration_seconds": float(row.total_duration or 0),
-            "cost_usd": float(row.total_cost or 0),
+            "tokens_in": c_in,
+            "tokens_out": c_out,
+            "characters": chars,
+            "duration_seconds": dur,
+            "cost_usd": c_cost,
         }
-        total_cost += float(row.total_cost or 0)
+        total_cost += c_cost
         total_calls += row.call_count
+        total_tokens_in += c_in
+        total_tokens_out += c_out
+        total_characters += chars
+        total_duration += dur
 
     return {
         "period_days": days,
         "total_cost_usd": round(total_cost, 6),
         "total_calls": total_calls,
+        "total_tokens_in": total_tokens_in,
+        "total_tokens_out": total_tokens_out,
+        "total_characters": total_characters,
+        "total_duration_seconds": round(total_duration, 2),
         "by_service": services,
     }
 
@@ -204,7 +235,8 @@ async def get_daily_costs(
             SELECT
                 DATE(created_at) as day,
                 service,
-                SUM(cost_usd) as cost
+                SUM(cost_usd) as cost,
+                COUNT(*) as calls
             FROM usage_logs
             {where_clauses}
             GROUP BY DATE(created_at), service
@@ -218,9 +250,10 @@ async def get_daily_costs(
     for row in rows:
         day_str = str(row.day)
         if day_str not in daily:
-            daily[day_str] = {"date": day_str, "total": 0.0, "breakdown": {}}
+            daily[day_str] = {"date": day_str, "total": 0.0, "calls": 0, "breakdown": {}}
         daily[day_str]["breakdown"][row.service] = round(float(row.cost or 0), 6)
         daily[day_str]["total"] += float(row.cost or 0)
+        daily[day_str]["calls"] += int(row.calls or 0)
 
     return list(daily.values())
 
@@ -229,9 +262,9 @@ async def get_usage_detail(
     db: AsyncSession,
     user_id: Optional[str] = None,
     days: int = 7,
-    limit: int = 100,
+    limit: int = 150,
 ) -> list[dict]:
-    """Get detailed individual call log."""
+    """Get detailed individual call log including full trace metadata."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     where_clauses = "WHERE created_at >= :cutoff"
@@ -244,7 +277,7 @@ async def get_usage_detail(
     result = await db.execute(
         text(f"""
             SELECT id, service, operation, tokens_in, tokens_out,
-                   characters, duration_seconds, cost_usd, created_at
+                   characters, duration_seconds, cost_usd, metadata_json, created_at
             FROM usage_logs
             {where_clauses}
             ORDER BY created_at DESC
@@ -254,8 +287,16 @@ async def get_usage_detail(
     )
     rows = result.fetchall()
 
-    return [
-        {
+    output = []
+    for row in rows:
+        meta = {}
+        if row.metadata_json:
+            try:
+                meta = json.loads(row.metadata_json)
+            except Exception:
+                meta = {"raw": row.metadata_json}
+
+        output.append({
             "id": str(row.id),
             "service": row.service,
             "operation": row.operation,
@@ -264,7 +305,8 @@ async def get_usage_detail(
             "characters": row.characters,
             "duration_seconds": float(row.duration_seconds),
             "cost_usd": float(row.cost_usd),
-            "created_at": str(row.created_at),
-        }
-        for row in rows
-    ]
+            "metadata": meta,
+            "created_at": row.created_at.isoformat() if hasattr(row.created_at, 'isoformat') else str(row.created_at),
+        })
+
+    return output

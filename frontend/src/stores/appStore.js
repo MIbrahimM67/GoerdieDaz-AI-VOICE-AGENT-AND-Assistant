@@ -71,6 +71,24 @@ const useAppStore = create((set, get) => ({
   activeToolCall: null,
   setActiveToolCall: (tool) => set({ activeToolCall: tool }),
   clearActiveToolCall: () => set({ activeToolCall: null }),
+
+  // ── Navigation Views ───────────────────────────────────────
+  // 'cockpit' | 'telemetry'
+  activeView: 'cockpit',
+  setActiveView: (view) => set({ activeView: view }),
+
+  // ── Live Telemetry & Audit Stream ──────────────────────────
+  telemetryEvents: [],
+  addTelemetryEvent: (evt) => set((s) => ({
+    telemetryEvents: [
+      {
+        ...evt,
+        _clientTimestamp: Date.now(),
+      },
+      ...s.telemetryEvents.slice(0, 249), // Keep latest 250 in-memory events
+    ],
+  })),
+  clearTelemetryEvents: () => set({ telemetryEvents: [] }),
 }));
 
 export default useAppStore;

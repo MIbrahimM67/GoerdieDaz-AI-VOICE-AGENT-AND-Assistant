@@ -11,6 +11,7 @@ import PersonaSwitcher from './PersonaSwitcher';
 import VoiceOrb from './VoiceOrb';
 import ClientProfileModal from './ClientProfileModal';
 import UsageDashboard from './UsageDashboard';
+import LiveTelemetryPage from './LiveTelemetryPage';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useVoice } from '../hooks/useVoice';
 import useAppStore from '../stores/appStore';
@@ -25,7 +26,10 @@ export default function MainInterface({ userId, accessToken }) {
     currentPersona,
     clearCurrentAIResponse,
     setCurrentTranscript,
-    clearTurns
+    clearTurns,
+    activeView,
+    setActiveView,
+    telemetryEvents,
   } = useAppStore();
 
   const [micError, setMicError] = useState('');
@@ -191,14 +195,17 @@ export default function MainInterface({ userId, accessToken }) {
             <span>{isSessionActive ? 'STANDBY' : 'ENGAGE'}</span>
           </button>
 
-          {/* Usage Dashboard Trigger */}
+          {/* Live Telemetry Full-Page Trigger */}
           <button
-            className="usage-toggle-btn"
-            onClick={() => setUsageDashboardOpen(true)}
-            title="View API Usage & Costs"
+            className={`usage-toggle-btn ${activeView === 'telemetry' ? 'active-tab' : ''}`}
+            onClick={() => setActiveView(activeView === 'telemetry' ? 'cockpit' : 'telemetry')}
+            title="Open Live Telemetry & Cost Traceability Dashboard"
           >
             <BarChart3 size={12} />
-            <span>USAGE</span>
+            <span>LIVE TELEMETRY</span>
+            {telemetryEvents.length > 0 && (
+              <span className="live-counter-pill">{telemetryEvents.length}</span>
+            )}
           </button>
 
           {/* Profile Trigger */}
@@ -226,56 +233,60 @@ export default function MainInterface({ userId, accessToken }) {
         </div>
       )}
 
-      {/* ── Main 3-Panel Hologram Viewport ─────────────────────── */}
-      <main className="jarvis-viewport">
-        {/* Left Column: Neural Memory Bank */}
-        <BrainPanel />
+      {/* ── View Router: Cockpit HUD vs Live Telemetry Page ──── */}
+      {activeView === 'telemetry' ? (
+        <LiveTelemetryPage onBack={() => setActiveView('cockpit')} />
+      ) : (
+        <main className="jarvis-viewport">
+          {/* Left Column: Neural Memory Bank */}
+          <BrainPanel />
 
-        {/* Center Column: Holographic Core Stage */}
-        <section style={s.centerStage}>
-          {/* Top HUD Frame Element */}
-          <div style={s.hudHeaderOrnament}>
-            <div style={s.ornamentLine} />
-            <span style={s.ornamentTitle}>ACOUSTIC SPATIAL SYNAPSE</span>
-            <div style={s.ornamentLine} />
-          </div>
-
-          {/* Center Canvas Voice Orb */}
-          <div style={s.orbWrapper}>
-            <VoiceOrb
-              onActivate={handleActivate}
-              onDeactivate={handleDeactivate}
-              disabled={!isSessionActive}
-            />
-          </div>
-
-          {/* Bottom HUD Spectrum Bar Decorator */}
-          <div style={s.spectrumContainer}>
-            <div style={s.spectrumGrid}>
-              {Array.from({ length: 28 }).map((_, i) => (
-                <span
-                  key={i}
-                  style={{
-                    ...s.spectrumBar,
-                    height: voiceState === 'speaking' || voiceState === 'listening'
-                      ? `${6 + Math.abs(Math.sin(i * 0.4 + sessionSeconds * 2)) * 22}px`
-                      : '4px',
-                    opacity: 0.3 + (i % 3) * 0.25,
-                  }}
-                />
-              ))}
+          {/* Center Column: Holographic Core Stage */}
+          <section style={s.centerStage}>
+            {/* Top HUD Frame Element */}
+            <div style={s.hudHeaderOrnament}>
+              <div style={s.ornamentLine} />
+              <span style={s.ornamentTitle}>ACOUSTIC SPATIAL SYNAPSE</span>
+              <div style={s.ornamentLine} />
             </div>
-            <div style={s.spectrumLegend}>
-              <span>FREQ 16.0 kHz</span>
-              <span>BUFFER DUPLEX</span>
-              <span>NOISE SUPPRESSION: ACTIVE</span>
-            </div>
-          </div>
-        </section>
 
-        {/* Right Column: Conversation Transcript */}
-        <ConversationLog />
-      </main>
+            {/* Center Canvas Voice Orb */}
+            <div style={s.orbWrapper}>
+              <VoiceOrb
+                onActivate={handleActivate}
+                onDeactivate={handleDeactivate}
+                disabled={!isSessionActive}
+              />
+            </div>
+
+            {/* Bottom HUD Spectrum Bar Decorator */}
+            <div style={s.spectrumContainer}>
+              <div style={s.spectrumGrid}>
+                {Array.from({ length: 28 }).map((_, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      ...s.spectrumBar,
+                      height: voiceState === 'speaking' || voiceState === 'listening'
+                        ? `${6 + Math.abs(Math.sin(i * 0.4 + sessionSeconds * 2)) * 22}px`
+                        : '4px',
+                      opacity: 0.3 + (i % 3) * 0.25,
+                    }}
+                  />
+                ))}
+              </div>
+              <div style={s.spectrumLegend}>
+                <span>FREQ 16.0 kHz</span>
+                <span>BUFFER DUPLEX</span>
+                <span>NOISE SUPPRESSION: ACTIVE</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Right Column: Conversation Transcript */}
+          <ConversationLog />
+        </main>
+      )}
 
       {/* Profile Modal */}
       <ClientProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />

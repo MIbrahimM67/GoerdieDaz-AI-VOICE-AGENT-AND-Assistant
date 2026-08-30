@@ -107,6 +107,37 @@ class RealtimeSessionHandler:
         self._use_elevenlabs = settings.use_elevenlabs
         self._elevenlabs_tts = None
 
+    async def _emit_telemetry(
+        self,
+        service: str,
+        operation: str,
+        tokens_in: int = 0,
+        tokens_out: int = 0,
+        characters: int = 0,
+        duration_seconds: float = 0.0,
+        metadata: Optional[dict] = None,
+    ):
+        """Log usage to DB and push real-time telemetry event to client WebSocket."""
+        try:
+            telemetry_data = await log_usage(
+                db=self.db,
+                user_id=self.user_id,
+                service=service,
+                operation=operation,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                characters=characters,
+                duration_seconds=duration_seconds,
+                metadata=metadata,
+            )
+            if telemetry_data and isinstance(telemetry_data, dict):
+                await self.send_to_client({
+                    "type": "telemetry_event",
+                    "telemetry": telemetry_data,
+                })
+        except Exception as e:
+            logger.warning(f"Telemetry emission failed (non-fatal): {e}")
+
     async def send_to_client(self, message: dict):
         """Send a JSON message to the browser client."""
         try:
@@ -358,6 +389,14 @@ class RealtimeSessionHandler:
                             query = args.get("query", "")
                             logger.info(f"AI searching memory for: {query}")
                             results = await retrieve_relevant_memories(self.user_id, query, self.db, top_k=5)
+
+                            # Emit live telemetry event for embedding & vector search
+                            await self._emit_telemetry(
+                                service="embedding",
+                                operation="search_memory_embed",
+                                tokens_in=len(query.split()) * 2,
+                                metadata={"query": query, "results_found": len(results) if results else 0},
+                            )
                             
                             output_str = "Memory search results:\n"
                             if results:
@@ -478,17 +517,13 @@ class RealtimeSessionHandler:
 
                             await self.db.commit()
 
-                            # Log usage: embedding cost for storing the fact
-                            try:
-                                await log_usage(
-                                    db=self.db,
-                                    user_id=self.user_id,
-                                    service="embedding",
-                                    operation="store_fact_embed",
-                                    tokens_in=len(content.split()) * 2,  # rough token estimate
-                                )
-                            except Exception:
-                                pass  # non-fatal
+                            # Log usage and emit live telemetry for fact storage embedding
+                            await self._emit_telemetry(
+                                service="embedding",
+                                operation="store_fact_embed",
+                                tokens_in=len(content.split()) * 2,
+                                metadata={"entity_key": entity_key, "content": content[:100], "importance": importance},
+                            )
 
                             await self.send_to_openai({
                                 "type": "conversation.item.create",
@@ -547,6 +582,14 @@ class RealtimeSessionHandler:
                                 {"uid": self.user_id, "emb": str(query_embedding), "cutoff": cutoff}
                             )
                             summaries = result.fetchall()
+
+                            # Emit live telemetry event for history search embedding
+                            await self._emit_telemetry(
+                                service="embedding",
+                                operation="search_history_embed",
+                                tokens_in=len(query.split()) * 2,
+                                metadata={"query": query, "days_back": days_back, "summaries_found": len(summaries) if summaries else 0},
+                            )
 
                             output = ""
                             if summaries:
@@ -695,22 +738,16 @@ class RealtimeSessionHandler:
             await run_post_turn(state, self.db)
             logger.info("Post-turn completed successfully")
 
-            # Log usage: estimate voice session cost for this turn
-            try:
-                # Rough estimates: ~5 words/sec speaking, ~3 words/sec for user
-                est_ai_words = len(response_text.split())
-                est_user_words = len(user_input.split())
-                est_duration = (est_ai_words / 5.0) + (est_user_words / 3.0)
-                await log_usage(
-                    db=self.db,
-                    user_id=self.user_id,
-                    service="openai_realtime",
-                    operation="voice_turn",
-                    duration_seconds=est_duration,
-                    metadata={"user_words": est_user_words, "ai_words": est_ai_words},
-                )
-            except Exception:
-                pass  # non-fatal
+            # Log usage and emit real-time telemetry event to client
+            est_ai_words = len(response_text.split())
+            est_user_words = len(user_input.split())
+            est_duration = (est_ai_words / 5.0) + (est_user_words / 3.0)
+            await self._emit_telemetry(
+                service="openai_realtime",
+                operation="voice_turn",
+                duration_seconds=est_duration,
+                metadata={"user_words": est_user_words, "ai_words": est_ai_words, "persona_id": self.persona_id},
+            )
         except Exception as e:
             logger.error(f"Post-turn processing failed: {e}", exc_info=True)
 
