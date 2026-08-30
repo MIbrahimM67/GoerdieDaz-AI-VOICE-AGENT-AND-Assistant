@@ -4,12 +4,13 @@
  * Left: Neural Memory Bank | Center: Holographic Voice Orb Stage | Right: Live Transcript
  */
 import { useEffect, useRef, useState } from 'react';
-import { Power, AlertTriangle, X, User, RotateCcw, Activity, ShieldAlert, Radio } from 'lucide-react';
+import { Power, AlertTriangle, X, User, RotateCcw, Activity, ShieldAlert, Radio, BarChart3 } from 'lucide-react';
 import BrainPanel from './BrainPanel';
 import ConversationLog from './ConversationLog';
 import PersonaSwitcher from './PersonaSwitcher';
 import VoiceOrb from './VoiceOrb';
 import ClientProfileModal from './ClientProfileModal';
+import UsageDashboard from './UsageDashboard';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useVoice } from '../hooks/useVoice';
 import useAppStore from '../stores/appStore';
@@ -29,6 +30,7 @@ export default function MainInterface({ userId, accessToken }) {
 
   const [micError, setMicError] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [usageDashboardOpen, setUsageDashboardOpen] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(true);
   const [sessionSeconds, setSessionSeconds] = useState(0);
 
@@ -189,6 +191,16 @@ export default function MainInterface({ userId, accessToken }) {
             <span>{isSessionActive ? 'STANDBY' : 'ENGAGE'}</span>
           </button>
 
+          {/* Usage Dashboard Trigger */}
+          <button
+            className="usage-toggle-btn"
+            onClick={() => setUsageDashboardOpen(true)}
+            title="View API Usage & Costs"
+          >
+            <BarChart3 size={12} />
+            <span>USAGE</span>
+          </button>
+
           {/* Profile Trigger */}
           <button
             style={s.profileBtn}
@@ -267,6 +279,11 @@ export default function MainInterface({ userId, accessToken }) {
 
       {/* Profile Modal */}
       <ClientProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
+
+      {/* Usage Dashboard Overlay */}
+      {usageDashboardOpen && (
+        <UsageDashboard onClose={() => setUsageDashboardOpen(false)} />
+      )}
     </div>
   );
 }

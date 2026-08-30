@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = ""  # Set after client picks a voice
     elevenlabs_model_id: str = "eleven_flash_v2_5"  # Low-latency conversational model
+    elevenlabs_output_format: str = "pcm_24000"  # 24kHz PCM16 for higher quality
+
+    # LangSmith (optional — usage tracing & observability)
+    langsmith_api_key: str = ""
+    langsmith_project: str = "geordiedaz"
+    langsmith_tracing: bool = False  # Set True in production with valid API key
 
     @property
     def use_elevenlabs(self) -> bool:

@@ -20,19 +20,55 @@ import base64
 import json
 import logging
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 import websockets
 from fastapi import WebSocket, WebSocketDisconnect
+from sqlalchemy import text as sa_text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.graph import run_post_turn, run_pre_turn
 from app.agent.state import AgentState
 from app.config import get_settings
+from app.models.memory import Memory
+from app.services.embedding_service import embed_text
+from app.services.memory_service import retrieve_relevant_memories
 from app.services.persona_service import persona_manager
+from app.services.usage_service import log_usage
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# ── Shared constant: memory tool instructions appended to every system prompt ──
+MEMORY_TOOL_INSTRUCTIONS = """
+
+MEMORY TOOLS — YOU MUST USE THESE:
+
+1. search_memory: ALWAYS call this tool BEFORE answering when the user:
+   - Asks "what car do I drive?", "do you remember my name?", "what did I tell you about..."
+   - Asks about ANY personal fact (health, family, possessions, preferences, location, job)
+   - References something they told you before
+   - Says "do you remember", "what do you know about me", etc.
+   DO NOT guess or make up answers. ALWAYS search first, then respond based on results.
+   Do NOT say "let me check" or any filler — just call the tool silently.
+
+2. store_fact: Call this when the user:
+   - Shares personal information (name, car, health condition, family, etc.)
+   - Says "remember that...", "store this...", "don't forget..."
+   - Mentions a new fact about themselves, even casually
+   Do NOT say "let me store that" or any filler — just call the tool silently.
+
+3. search_history: Call this when the user:
+   - Asks about a previous conversation ("what did we talk about last time?")
+   - References past events ("where were we driving?", "what did we do last Friday?")
+   - Asks about something that happened in an earlier session
+   Do NOT say any filler — just call the tool silently.
+
+CRITICAL: If the user asks about themselves and you don't search_memory first, you are FAILING your job. Never say "I don't know" or "I don't have that information" without searching first.
+
+IMPORTANT: When calling tools, do NOT generate any speech or filler text before the tool call. Just call the tool and respond with the result."""
 
 OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime-mini"
 
@@ -66,6 +102,7 @@ class RealtimeSessionHandler:
         self._current_user_input = ""
         self._agent_state: Optional[AgentState] = None
         self._audio_muted = False  # Set during barge-in, cleared on new response
+        self._transcript_event = asyncio.Event()  # Signalled when user transcript arrives
         # ElevenLabs TTS (Geordie voice)
         self._use_elevenlabs = settings.use_elevenlabs
         self._elevenlabs_tts = None
@@ -143,35 +180,7 @@ class RealtimeSessionHandler:
         )
 
         # Add memory tool usage instructions to system prompt
-        memory_instructions = """
-
-MEMORY TOOLS — YOU MUST USE THESE:
-
-1. search_memory: ALWAYS call this tool BEFORE answering when the user:
-   - Asks "what car do I drive?", "do you remember my name?", "what did I tell you about..."
-   - Asks about ANY personal fact (health, family, possessions, preferences, location, job)
-   - References something they told you before
-   - Says "do you remember", "what do you know about me", etc.
-   DO NOT guess or make up answers. ALWAYS search first, then respond based on results.
-   Do NOT say "let me check" or any filler — just call the tool silently.
-
-2. store_fact: Call this when the user:
-   - Shares personal information (name, car, health condition, family, etc.)
-   - Says "remember that...", "store this...", "don't forget..."
-   - Mentions a new fact about themselves, even casually
-   Do NOT say "let me store that" or any filler — just call the tool silently.
-
-3. search_history: Call this when the user:
-   - Asks about a previous conversation ("what did we talk about last time?")
-   - References past events ("where were we driving?", "what did we do last Friday?")
-   - Asks about something that happened in an earlier session
-   Do NOT say any filler — just call the tool silently.
-
-CRITICAL: If the user asks about themselves and you don't search_memory first, you are FAILING your job. Never say "I don't know" or "I don't have that information" without searching first.
-
-IMPORTANT: When calling tools, do NOT generate any speech or filler text before the tool call. Just call the tool and respond with the result."""
-
-        enhanced_prompt = system_prompt + memory_instructions
+        enhanced_prompt = system_prompt + MEMORY_TOOL_INSTRUCTIONS
 
         # TESTED WORKING: gpt-realtime-mini accepts ONLY these params.
         # voice set via URL param, transcription via nested audio object.
@@ -237,11 +246,9 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
                 event = json.loads(raw_msg)
                 event_type = event.get("type", "")
 
-                # Debug: log every event type to file (except noisy audio deltas)
+                # Log event types (except noisy audio deltas)
                 if "audio" not in event_type or "transcript" in event_type or "done" in event_type:
-                    logger.info(f"[OAI EVENT] {event_type}")
-                    with open("oai_events.log", "a") as f:
-                        f.write(f"{event_type}\n")
+                    logger.debug(f"[OAI EVENT] {event_type}")
 
                 # ── Audio output chunk → relay to browser ──────────────────
                 if event_type in ["response.audio.delta", "response.output_audio.delta"]:
@@ -281,6 +288,7 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
                 elif event_type == "conversation.item.input_audio_transcription.completed":
                     transcript = event.get("transcript", "")
                     self._current_user_input = transcript
+                    self._transcript_event.set()  # Signal that transcript is ready
                     await self.send_to_client({
                         "type": "transcript",
                         "text": transcript,
@@ -349,8 +357,6 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
                             args = json.loads(arguments)
                             query = args.get("query", "")
                             logger.info(f"AI searching memory for: {query}")
-                            
-                            from app.services.memory_service import retrieve_relevant_memories
                             results = await retrieve_relevant_memories(self.user_id, query, self.db, top_k=5)
                             
                             output_str = "Memory search results:\n"
@@ -400,16 +406,9 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
                             importance = float(args.get("importance", 1.0))
                             logger.info(f"AI storing fact: {entity_key} = {content}")
 
-                            from app.services.embedding_service import embed_text
-                            from app.models.memory import Memory
-                            from sqlalchemy.dialects.postgresql import insert as pg_insert
-                            from datetime import datetime, timezone
-                            import uuid as uuid_mod
-
                             embedding = await embed_text(content)
 
                             # Dedup: check if a very similar fact already exists
-                            from sqlalchemy import text as sa_text
                             dedup_result = await self.db.execute(
                                 sa_text("""
                                     SELECT id, entity_key, content,
@@ -448,7 +447,7 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
                                 )
                             else:
                                 stmt = pg_insert(Memory).values(
-                                    id=uuid_mod.uuid4(),
+                                    id=uuid.uuid4(),
                                     user_id=self.user_id,
                                     entity_key=entity_key,
                                     content=content,
@@ -461,8 +460,8 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
                                 )
                                 if entity_key:
                                     stmt = stmt.on_conflict_do_update(
-                                        index_elements=None,
-                                        constraint="ix_memories_user_entity",
+                                        index_elements=["user_id", "entity_key"],
+                                        index_where=sa_text("entity_key IS NOT NULL"),
                                         set_={
                                             "content": stmt.excluded.content,
                                             "importance_score": stmt.excluded.importance_score,
@@ -478,6 +477,18 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
                                 await self.db.execute(stmt)
 
                             await self.db.commit()
+
+                            # Log usage: embedding cost for storing the fact
+                            try:
+                                await log_usage(
+                                    db=self.db,
+                                    user_id=self.user_id,
+                                    service="embedding",
+                                    operation="store_fact_embed",
+                                    tokens_in=len(content.split()) * 2,  # rough token estimate
+                                )
+                            except Exception:
+                                pass  # non-fatal
 
                             await self.send_to_openai({
                                 "type": "conversation.item.create",
@@ -515,9 +526,7 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
                             days_back = int(args.get("days_back", 30))
                             logger.info(f"AI searching history: query='{query}' days_back={days_back}")
 
-                            from app.services.embedding_service import embed_text
-                            from sqlalchemy import text as sa_text
-                            from datetime import datetime, timezone, timedelta
+                            from datetime import timedelta
 
                             query_embedding = await embed_text(query)
                             cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
@@ -649,10 +658,14 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
             self._current_user_input = ""
             return
 
-        # Wait briefly for Whisper transcription — it arrives AFTER response.done
-        # Without this, _current_user_input is always empty
+        # Wait for Whisper transcription — it arrives AFTER response.done
+        # Use event-based wait with timeout instead of fragile sleep
         if not self._current_user_input:
-            await asyncio.sleep(1.5)
+            self._transcript_event.clear()
+            try:
+                await asyncio.wait_for(self._transcript_event.wait(), timeout=3.0)
+            except asyncio.TimeoutError:
+                logger.warning(f"Transcript not received within 3s for user {self.user_id}")
 
 
         user_input = self._current_user_input or "(speech detected but transcript unavailable)"
@@ -681,6 +694,23 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
         try:
             await run_post_turn(state, self.db)
             logger.info("Post-turn completed successfully")
+
+            # Log usage: estimate voice session cost for this turn
+            try:
+                # Rough estimates: ~5 words/sec speaking, ~3 words/sec for user
+                est_ai_words = len(response_text.split())
+                est_user_words = len(user_input.split())
+                est_duration = (est_ai_words / 5.0) + (est_user_words / 3.0)
+                await log_usage(
+                    db=self.db,
+                    user_id=self.user_id,
+                    service="openai_realtime",
+                    operation="voice_turn",
+                    duration_seconds=est_duration,
+                    metadata={"user_words": est_user_words, "ai_words": est_ai_words},
+                )
+            except Exception:
+                pass  # non-fatal
         except Exception as e:
             logger.error(f"Post-turn processing failed: {e}", exc_info=True)
 
@@ -824,35 +854,7 @@ IMPORTANT: When calling tools, do NOT generate any speech or filler text before 
             max_tokens = config.response_rules.max_tokens
 
             # Add same memory tool instructions as initial config
-            memory_instructions = """
-
-MEMORY TOOLS — YOU MUST USE THESE:
-
-1. search_memory: ALWAYS call this tool BEFORE answering when the user:
-   - Asks "what car do I drive?", "do you remember my name?", "what did I tell you about..."
-   - Asks about ANY personal fact (health, family, possessions, preferences, location, job)
-   - References something they told you before
-   - Says "do you remember", "what do you know about me", etc.
-   DO NOT guess or make up answers. ALWAYS search first, then respond based on results.
-   Do NOT say "let me check" or any filler — just call the tool silently.
-
-2. store_fact: Call this when the user:
-   - Shares personal information (name, car, health condition, family, etc.)
-   - Says "remember that...", "store this...", "don't forget..."
-   - Mentions a new fact about themselves, even casually
-   Do NOT say "let me store that" or any filler — just call the tool silently.
-
-3. search_history: Call this when the user:
-   - Asks about a previous conversation ("what did we talk about last time?")
-   - References past events ("where were we driving?", "what did we do last Friday?")
-   - Asks about something that happened in an earlier session
-   Do NOT say any filler — just call the tool silently.
-
-CRITICAL: If the user asks about themselves and you don't search_memory first, you are FAILING your job. Never say "I don't know" or "I don't have that information" without searching first.
-
-IMPORTANT: When calling tools, do NOT generate any speech or filler text before the tool call. Just call the tool and respond with the result."""
-
-            enhanced_prompt = new_prompt + memory_instructions
+            enhanced_prompt = new_prompt + MEMORY_TOOL_INSTRUCTIONS
 
             # Full reconnect — the only reliable way to change voice in GA API
             # In-place session.update with voice change is rejected if audio is present

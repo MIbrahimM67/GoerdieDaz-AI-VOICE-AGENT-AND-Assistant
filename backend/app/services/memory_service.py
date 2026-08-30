@@ -123,9 +123,11 @@ async def retrieve_relevant_memories(
         sim = float(row.similarity_score)
         imp = float(row.importance_score)
 
-        # Recency score: decays from 1.0 to 0.0 over 30 days
-        age_days = (now - row.updated_at.replace(tzinfo=timezone.utc)).days
-        recency = max(0.0, 1.0 - (age_days / 30.0))
+        # Recency score: logarithmic decay — stays relevant much longer
+        # 1 day ago = 0.83, 7 days = 0.54, 30 days = 0.28, 90 days = 0.18
+        import math
+        age_days = max(0, (now - row.updated_at.replace(tzinfo=timezone.utc)).days)
+        recency = 1.0 / (1.0 + math.log(1.0 + age_days))
 
         composite = 0.5 * sim + 0.3 * imp + 0.2 * recency
         scored.append({
@@ -262,6 +264,24 @@ Return ONLY valid JSON object with a "facts" key, no markdown, no explanation.""
         if isinstance(data, list):  # fallback if model returns bare array
             facts = data
         logger.info(f"Extraction for user {user_id}: {len(facts)} facts found in turn")
+
+        # Log usage for cost tracking (non-fatal)
+        try:
+            usage = response.usage
+            if usage:
+                from app.services.usage_service import log_usage
+                await log_usage(
+                    db=db,
+                    user_id=user_id,
+                    service="gpt4o_extraction",
+                    operation="extract_facts",
+                    tokens_in=usage.prompt_tokens,
+                    tokens_out=usage.completion_tokens,
+                    metadata={"model": "gpt-4o-mini", "facts_found": len(facts)},
+                )
+        except Exception as usage_err:
+            logger.debug(f"Usage logging failed (non-fatal): {usage_err}")
+
     except Exception as e:
         logger.error(f"Memory extraction LLM call failed for user {user_id}: {e}")
         return
@@ -291,12 +311,56 @@ Return ONLY valid JSON object with a "facts" key, no markdown, no explanation.""
         logger.error(f"Batch embedding failed for user {user_id}: {e}")
         return
 
+    # Pre-fetch existing memories for dedup (single query, not per-fact)
+    existing_memories = []
+    try:
+        existing_result = await db.execute(
+            text("""
+                SELECT id, entity_key, content, embedding
+                FROM memories
+                WHERE user_id = CAST(:user_id AS uuid)
+                  AND embedding IS NOT NULL
+            """),
+            {"user_id": str(user_id)}
+        )
+        existing_memories = existing_result.fetchall()
+    except Exception as e:
+        logger.warning(f"Dedup pre-fetch failed (proceeding without dedup): {e}")
+
     saved_count = 0
+    skipped_dedup = 0
     for fact, embedding in zip(valid_facts, embeddings):
         try:
             content = fact.get("content", "").strip()
             importance = float(fact.get("importance_score", 0.0))
             entity_key = fact.get("entity_key")
+
+            # Dedup: skip if a very similar fact already exists (cosine > 0.92)
+            # This prevents near-duplicate facts from piling up
+            if existing_memories:
+                from pgvector.sqlalchemy import Vector
+                import numpy as np
+                emb_array = np.array(embedding)
+                emb_norm = np.linalg.norm(emb_array)
+                is_duplicate = False
+                for existing in existing_memories:
+                    if existing.embedding is not None:
+                        ex_array = np.array(existing.embedding)
+                        ex_norm = np.linalg.norm(ex_array)
+                        if emb_norm > 0 and ex_norm > 0:
+                            similarity = float(np.dot(emb_array, ex_array) / (emb_norm * ex_norm))
+                            if similarity > 0.92:
+                                # If same entity_key, allow update (UPSERT handles it)
+                                if entity_key and existing.entity_key == entity_key:
+                                    break
+                                # Different key or null key but same content — skip
+                                if not entity_key or existing.entity_key != entity_key:
+                                    logger.debug(f"Dedup: skipping near-duplicate (sim={similarity:.3f}): {content[:60]}")
+                                    is_duplicate = True
+                                    break
+                if is_duplicate:
+                    skipped_dedup += 1
+                    continue
             memory_type = fact.get("memory_type", "semantic")
             confidence = float(fact.get("confidence_score", 1.0))
 
@@ -340,4 +404,6 @@ Return ONLY valid JSON object with a "facts" key, no markdown, no explanation.""
 
     if saved_count > 0:
         await db.commit()
-        logger.info(f"Saved {saved_count} memory facts for user {user_id}")
+        logger.info(f"Saved {saved_count} memory facts for user {user_id} (skipped {skipped_dedup} near-duplicates)")
+    elif skipped_dedup > 0:
+        logger.info(f"All {skipped_dedup} facts were near-duplicates — nothing new to save for user {user_id}")

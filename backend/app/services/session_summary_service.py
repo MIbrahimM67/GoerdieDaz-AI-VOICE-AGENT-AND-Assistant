@@ -45,6 +45,14 @@ async def summarise_session(
 
     # Build conversation text
     convo = "\n".join(f"{'User' if t.role == 'user' else 'GeordieDaz'}: {t.content}" for t in turns)
+    # Truncate at sentence boundary (not mid-word)
+    if len(convo) > 3000:
+        truncated = convo[:3000]
+        last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+        if last_period > 2000:
+            convo = truncated[:last_period + 1]
+        else:
+            convo = truncated
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     persona_id = turns[0].persona_id if turns else "friendly_geordie"
 

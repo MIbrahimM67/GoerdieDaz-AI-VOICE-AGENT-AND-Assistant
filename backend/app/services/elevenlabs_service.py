@@ -37,16 +37,18 @@ class ElevenLabsTTS:
         voice_id: Optional[str] = None,
         model_id: Optional[str] = None,
         on_audio_chunk: Optional[Callable] = None,
-        output_format: str = "pcm_16000",  # 16kHz PCM16 — matches our frontend
+        output_format: Optional[str] = None,
     ):
         self.voice_id = voice_id or settings.elevenlabs_voice_id
         self.model_id = model_id or settings.elevenlabs_model_id
         self.api_key = settings.elevenlabs_api_key
         self.on_audio_chunk = on_audio_chunk
-        self.output_format = output_format
+        self.output_format = output_format or settings.elevenlabs_output_format
         self._ws = None
         self._listen_task = None
         self._connected = False
+        self._reconnect_attempts = 0
+        self._max_reconnects = 3
 
     async def connect(self):
         """Open WebSocket connection to ElevenLabs streaming TTS."""
@@ -108,6 +110,15 @@ class ElevenLabsTTS:
 
         except websockets.ConnectionClosed:
             logger.info("ElevenLabs WS closed")
+            # Attempt auto-reconnect
+            if self._reconnect_attempts < self._max_reconnects:
+                self._reconnect_attempts += 1
+                logger.info(f"ElevenLabs reconnect attempt {self._reconnect_attempts}/{self._max_reconnects}")
+                await asyncio.sleep(0.5)
+                try:
+                    await self.connect()
+                except Exception as e:
+                    logger.error(f"ElevenLabs reconnect failed: {e}")
         except Exception as e:
             logger.error(f"ElevenLabs listen error: {e}")
 

@@ -1,16 +1,19 @@
 """
 GeordieDaz — FastAPI Application Entry Point
 """
+import asyncio
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api import auth, memory, persona, session
+from app.api import auth, memory, persona, session, usage
 from app.config import get_settings
 from app.database import AsyncSessionLocal, get_db
 from app.middleware.auth_middleware import get_ws_user
@@ -48,18 +51,16 @@ async def lifespan(app: FastAPI):
 
     # Start keep-alive ping for Render free tier
     keep_alive_task = None
-    import os
     render_url = os.getenv("RENDER_EXTERNAL_URL") or "https://goerdiedaz-ai-voice-agent-and-assistant.onrender.com"
-    
+
     async def keep_alive():
-        import httpx
-        import asyncio
         async with httpx.AsyncClient() as client:
             while True:
                 await asyncio.sleep(600)  # 10 minutes
                 try:
                     logger.info(f"Keep-alive ping to {render_url}/health")
-                    await client.get(f"{render_url}/health")
+                    resp = await client.get(f"{render_url}/health", timeout=10.0)
+                    logger.debug(f"Keep-alive response: {resp.status_code}")
                 except Exception as e:
                     logger.warning(f"Keep-alive ping failed: {e}")
 
@@ -69,6 +70,10 @@ async def lifespan(app: FastAPI):
 
     if keep_alive_task:
         keep_alive_task.cancel()
+        try:
+            await keep_alive_task
+        except asyncio.CancelledError:
+            pass
 
     # ── Shutdown ─────────────────────────────────────────────────────────
     logger.info("GeordieDaz shutting down...")
@@ -109,6 +114,7 @@ app.include_router(auth.router)
 app.include_router(persona.router)
 app.include_router(session.router)
 app.include_router(memory.router)
+app.include_router(usage.router)
 
 
 @app.get("/health", tags=["system"])
