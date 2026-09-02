@@ -190,71 +190,39 @@ async def write_memory_async(
     4. Embed content + store with vector
     5. Update Redis working memory
     """
+    # Skip extraction if user input has no self-referential or personal indicators
+    lower_user = user_input.lower().strip()
+    PERSONAL_INDICATORS = {
+        "i am", "i'm", "my ", "my.", "my,", "i have", "i live", "i work", 
+        "i drive", "remember", "call me", "i bought", "i like", "i love", 
+        "i hate", "i've", "myself", "am ", "years old", "my name"
+    }
+    has_personal_fact = any(ind in lower_user for ind in PERSONAL_INDICATORS)
+    if not has_personal_fact:
+        logger.info(f"Skipping fact extraction — no personal indicators in '{user_input[:40]}'")
+        return
+
     client = get_llm_client()
 
-    extraction_prompt = f"""You are a fact extraction system for a personal AI assistant. Analyse this conversation turn and extract ALL meaningful facts and memories about the user.
+    extraction_prompt = f"""Extract personal facts about the user from this conversation turn.
+Dot-notation keys:
+- Core identity: user.name, user.age, user.job, user.city (importance 0.8-1.0)
+- Possessions & preferences: user.car.<make>, user.pet.<type>, user.preference.<item> (importance 0.6-0.8)
+- Single-value facts like user.age, user.job, user.name overwrite previous values.
 
-PRIORITY EXTRACTION (importance_score >= 0.85):
-- Health conditions, allergies, medical info (e.g. "I have diabetes", "I'm allergic to shellfish")
-- Possessions and vehicles (e.g. "I drive a red Ferrari", "I just bought a house")
-- Explicit storage requests (e.g. "remember that I...", "store this fact", "don't forget that...")
-- Family members and relationships (e.g. "my wife's name is Sarah", "I have two kids")
-- Core identity facts (name, age, birthday, profession, location)
-
-STANDARD EXTRACTION (importance_score 0.5-0.84):
-- Preferences and habits (food, music, hobbies, routines)
-- Goals and plans (e.g. "I want to learn guitar", "I'm planning a trip to Japan")
-- Emotional states and significant experiences
-- Work and career details
-
-LOW PRIORITY (importance_score 0.3-0.49):
-- Casual mentions, minor preferences, what they ate today
-- Conversational context that may be useful later
-
-ENTITY KEY RULES (critical for memory accuracy):
-- Use SPECIFIC identifiers that distinguish individual items:
-  - Cars: "user.car.ferrari", "user.car.tesla" (NOT just "user.car")
-  - Kids: "user.child.emma", "user.child.jack" (NOT just "user.kids")
-  - Health: "user.health.diabetes", "user.health.allergy.shellfish"
-  - Pets: "user.pet.dog.max", "user.pet.cat.luna"
-- This lets the user own MULTIPLE items without overwriting each other.
-
-ADDITION vs REPLACEMENT:
-- "I also bought a Tesla" → ADD new key "user.car.tesla" (keeps existing cars)
-- "I sold my Ferrari and bought a Tesla" → Use key "user.car.ferrari" with content "The user sold their Ferrari" + add "user.car.tesla"
-- "I got a new car, a Tesla" (ambiguous, no mention of selling) → ADD "user.car.tesla" (keep old cars, they might still have them)
-- Rule: NEVER delete/overwrite a possession unless the user explicitly says they sold, lost, or replaced it.
-
-SINGLE-VALUE FACTS (use generic keys — these DO overwrite):
-- Name: "user.name" (a person only has one name)
-- City: "user.city" (they live in one place at a time)
-- Job: "user.job" (primary job)
-- Age: "user.age"
-
-OTHER RULES:
-- If the user EXPLICITLY asks the AI to remember/store something, set importance_score to 1.0
-- Health and medical facts always get importance >= 0.9
-- Extract facts even from casual mentions — "yeah I drive a Ferrari" is just as important as "I drive a Ferrari"
-
-Conversation turn:
+Turn:
 {turn_text}
 
-Return a JSON object with a single key "facts" containing an array. Each item must have:
-- "entity_key": snake_case identifier following the rules above. Use null for episodic/one-off memories.
-- "content": the fact as a clear, complete sentence (e.g. "The user drives a red Ferrari." or "The user has Type 2 diabetes.")
-- "memory_type": "semantic" for durable facts, "episodic" for transient context
-- "importance_score": float 0.0-1.0
-- "confidence_score": float 0.0-1.0
-
-If no facts can be extracted, return {{"facts": []}}.
-Return ONLY valid JSON object with a "facts" key, no markdown, no explanation."""
+Return JSON with "facts" array. Example:
+{{"facts": [{{"entity_key": "user.age", "content": "The user is 23 years old.", "memory_type": "semantic", "importance_score": 0.9, "confidence_score": 0.9}}]}}
+If no personal facts, return {{"facts": []}}."""
 
     try:
         response = await client.chat.completions.create(
             model=get_chat_model(),
             messages=[{"role": "user", "content": extraction_prompt}],
             response_format={"type": "json_object"},
-            max_tokens=800,
+            max_tokens=300,
             temperature=0.1,
         )
         raw = response.choices[0].message.content

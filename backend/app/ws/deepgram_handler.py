@@ -96,6 +96,7 @@ class DeepgramVoiceHandler:
         self._is_speaking = False
         self._audio_muted = False
         self._elevenlabs_tts = None
+        self._reconnecting = False
 
         # Groq tool definitions (subset — real tool calls go through Groq function calling)
         self._tools = self._build_tools()
@@ -121,7 +122,7 @@ class DeepgramVoiceHandler:
                 "type": "function",
                 "function": {
                     "name": "store_fact",
-                    "description": "Store a fact about the user in long-term memory.",
+                    "description": "Store a fact about the user in long-term memory. Use dot notation for entity_key, e.g. user.age, user.job, user.name, user.city.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -151,8 +152,7 @@ class DeepgramVoiceHandler:
             }
         ]
 
-    async def connect(self):
-        """Open Deepgram STT WebSocket and ElevenLabs TTS."""
+    async def _connect_deepgram(self):
         url = DEEPGRAM_WS_URL.format(model=settings.deepgram_model)
         logger.info(f"Connecting to Deepgram STT for user {self.user_id}")
         self.deepgram_ws = await websockets.connect(
@@ -161,8 +161,29 @@ class DeepgramVoiceHandler:
             ping_interval=10,
             ping_timeout=5,
         )
+        if self._dg_task and not self._dg_task.done():
+            self._dg_task.cancel()
         self._dg_task = asyncio.create_task(self._listen_deepgram())
-        self._keepalive_task = asyncio.create_task(self._keepalive_loop())
+        if not self._keepalive_task or self._keepalive_task.done():
+            self._keepalive_task = asyncio.create_task(self._keepalive_loop())
+
+    async def _reconnect_deepgram(self):
+        if self._reconnecting:
+            return
+        self._reconnecting = True
+        try:
+            logger.info(f"Auto-reconnecting Deepgram STT for user {self.user_id}...")
+            await asyncio.sleep(0.5)
+            await self._connect_deepgram()
+            logger.info(f"Deepgram STT auto-reconnected successfully for user {self.user_id}")
+        except Exception as e:
+            logger.warning(f"Deepgram auto-reconnect failed: {e}")
+        finally:
+            self._reconnecting = False
+
+    async def connect(self):
+        """Open Deepgram STT WebSocket and ElevenLabs TTS."""
+        await self._connect_deepgram()
 
         # Connect ElevenLabs TTS
         if settings.use_elevenlabs:
@@ -177,23 +198,31 @@ class DeepgramVoiceHandler:
         """Periodically send KeepAlive to prevent Deepgram 1011 stream timeout."""
         try:
             while True:
-                await asyncio.sleep(5)
-                if self.deepgram_ws:
+                await asyncio.sleep(3)
+                if self.deepgram_ws and getattr(self.deepgram_ws, "state", None) == websockets.protocol.State.OPEN:
                     try:
                         await self.deepgram_ws.send(json.dumps({"type": "KeepAlive"}))
                     except Exception:
-                        break
+                        if not self._reconnecting:
+                            asyncio.create_task(self._reconnect_deepgram())
+                elif not self._reconnecting:
+                    asyncio.create_task(self._reconnect_deepgram())
         except asyncio.CancelledError:
             pass
 
     async def send_audio(self, pcm16_b64: str):
         """Forward PCM16 audio chunk from browser to Deepgram."""
-        if self.deepgram_ws:
-            try:
-                audio_bytes = base64.b64decode(pcm16_b64)
-                await self.deepgram_ws.send(audio_bytes)
-            except Exception as e:
-                logger.warning(f"Deepgram audio send failed: {e}")
+        if not self.deepgram_ws or getattr(self.deepgram_ws, "state", None) != websockets.protocol.State.OPEN:
+            if not self._reconnecting:
+                asyncio.create_task(self._reconnect_deepgram())
+            return
+
+        try:
+            audio_bytes = base64.b64decode(pcm16_b64)
+            await self.deepgram_ws.send(audio_bytes)
+        except Exception as e:
+            if not self._reconnecting:
+                asyncio.create_task(self._reconnect_deepgram())
 
     async def cancel_response(self):
         """Barge-in: mute audio and discard current response."""
@@ -258,8 +287,12 @@ class DeepgramVoiceHandler:
 
         except websockets.ConnectionClosed as e:
             logger.info(f"Deepgram WS closed for user {self.user_id}: {e}")
+            if not self._reconnecting:
+                asyncio.create_task(self._reconnect_deepgram())
         except Exception as e:
-            logger.error(f"Deepgram listener error: {e}")
+            logger.error(f"Deepgram listen error for user {self.user_id}: {e}")
+            if not self._reconnecting:
+                asyncio.create_task(self._reconnect_deepgram())
 
     async def _call_groq(self, user_text: str):
         """
