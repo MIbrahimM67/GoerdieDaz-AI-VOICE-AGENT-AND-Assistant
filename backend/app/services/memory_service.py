@@ -169,6 +169,32 @@ async def get_core_memories(user_id: str, db: AsyncSession, limit: int = 10) -> 
     return core_facts
 
 
+async def get_recent_episodic_memories(user_id: str, db: AsyncSession, limit: int = 4) -> list[dict]:
+    """
+    Fetch the most recent episodic memories (daily digests and session summaries).
+    Injected unconditionally so the agent always knows what happened in recent sessions.
+    """
+    sql = text("""
+        SELECT content, entity_key, importance_score, updated_at
+        FROM memories
+        WHERE user_id = CAST(:user_id AS uuid) AND memory_type = 'episodic'
+        ORDER BY updated_at DESC
+        LIMIT :limit
+    """)
+    result = await db.execute(sql, {"user_id": str(user_id), "limit": limit})
+    rows = result.fetchall()
+
+    episodes = []
+    for row in rows:
+        episodes.append({
+            "content": row.content,
+            "entity_key": row.entity_key,
+            "memory_type": "episodic",
+            "importance_score": float(row.importance_score),
+        })
+    return episodes
+
+
 # ─── Memory Write & Consolidation ─────────────────────────────────────────
 
 

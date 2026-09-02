@@ -143,8 +143,8 @@ class ElevenLabsTTS:
             logger.error(f"ElevenLabs listen error: {e}")
             self._connected = False
 
-    async def send_text(self, text: str):
-        """Stream a text chunk to ElevenLabs for TTS generation."""
+    async def send_text(self, text: str, try_trigger_generation: bool = False):
+        """Stream a text token or chunk to ElevenLabs for TTS generation."""
         if not text:
             return
 
@@ -152,10 +152,10 @@ class ElevenLabsTTS:
             if not self.is_connected:
                 await self.connect()
 
-            await self._ws.send(json.dumps({
-                "text": text,
-                "try_trigger_generation": True,
-            }))
+            msg = {"text": text}
+            if try_trigger_generation:
+                msg["try_trigger_generation"] = True
+            await self._ws.send(json.dumps(msg))
         except Exception as e:
             logger.error(f"ElevenLabs send_text error: {e}")
 

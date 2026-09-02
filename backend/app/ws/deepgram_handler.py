@@ -347,14 +347,7 @@ class DeepgramVoiceHandler:
                     await self._on_response_text(delta.content)
 
                     if self._elevenlabs_tts and not self._audio_muted:
-                        tts_buffer += delta.content
-                        has_punct = any(p in delta.content for p in SENTENCE_PUNCTUATION)
-                        has_comma = ("," in delta.content or ":" in delta.content or "—" in delta.content) and len(tts_buffer) >= 15
-                        is_ready = len(tts_buffer) >= 35 and delta.content.endswith(" ")
-
-                        if has_punct or has_comma or is_ready:
-                            await self._elevenlabs_tts.send_text(tts_buffer)
-                            tts_buffer = ""
+                        await self._elevenlabs_tts.send_text(delta.content)
 
                 # ── Tool call accumulation ──────────────────────────────────
                 if delta.tool_calls:
@@ -376,9 +369,6 @@ class DeepgramVoiceHandler:
 
             # ── Flush remaining text to ElevenLabs ────────────────────────────
             if self._elevenlabs_tts and not self._audio_muted:
-                if tts_buffer.strip():
-                    await self._elevenlabs_tts.send_text(tts_buffer)
-                    tts_buffer = ""
                 if response_text and not tool_calls_acc:
                     await self._elevenlabs_tts.flush()
 
@@ -433,18 +423,9 @@ class DeepgramVoiceHandler:
                         response_text += delta.content
                         await self._on_response_text(delta.content)
                         if self._elevenlabs_tts and not self._audio_muted:
-                            tts_buffer2 += delta.content
-                            has_punct = any(p in delta.content for p in SENTENCE_PUNCTUATION)
-                            has_comma = ("," in delta.content or ":" in delta.content or "—" in delta.content) and len(tts_buffer2) >= 15
-                            is_ready = len(tts_buffer2) >= 35 and delta.content.endswith(" ")
-
-                            if has_punct or has_comma or is_ready:
-                                await self._elevenlabs_tts.send_text(tts_buffer2)
-                                tts_buffer2 = ""
+                            await self._elevenlabs_tts.send_text(delta.content)
 
                 if self._elevenlabs_tts and not self._audio_muted:
-                    if tts_buffer2.strip():
-                        await self._elevenlabs_tts.send_text(tts_buffer2)
                     await self._elevenlabs_tts.flush()
 
             # ── Done ────────────────────────────────────────────────────────

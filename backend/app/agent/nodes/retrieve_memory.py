@@ -5,7 +5,12 @@ from langchain_core.runnables.config import RunnableConfig
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.state import AgentState
-from app.services.memory_service import get_working_memory, retrieve_relevant_memories, get_core_memories
+from app.services.memory_service import (
+    get_working_memory,
+    retrieve_relevant_memories,
+    get_core_memories,
+    get_recent_episodic_memories,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -13,19 +18,23 @@ logger = logging.getLogger(__name__)
 async def retrieve_memory(state: AgentState, config: RunnableConfig) -> AgentState:
     """
     Retrieve relevant memories for the current user input.
-    1. Core memory (unconditional top facts about user)
-    2. Semantic search (pgvector) for relevant long-term facts
-    3. Working memory (Redis) for last 20 turns
+    1. Core memory (unconditional top semantic facts about user)
+    2. Recent episodic memory (unconditional past session summaries & daily digests)
+    3. Semantic search (pgvector) for relevant long-term facts
+    4. Working memory (Redis) for last 20 turns
     """
     db = config["configurable"]["db"]
     user_id = state["user_id"]
     user_input = state.get("user_input", "")
 
     try:
-        # 1. Unconditional Core Facts
+        # 1. Unconditional Core Facts (semantic: age, job, car, preferences)
         core = await get_core_memories(user_id=user_id, db=db, limit=10)
-        
-        # 2. Semantic memory retrieval
+
+        # 2. Unconditional Recent Episodic Memories (what we did yesterday, past sessions)
+        episodes = await get_recent_episodic_memories(user_id=user_id, db=db, limit=4)
+
+        # 3. Semantic memory retrieval (if user asked something specific)
         if user_input.strip():
             semantic = await retrieve_relevant_memories(
                 user_id=user_id,
@@ -36,10 +45,10 @@ async def retrieve_memory(state: AgentState, config: RunnableConfig) -> AgentSta
         else:
             semantic = []
 
-        # Merge core and semantic, avoiding exact content duplicates
-        merged_memories = list(core)
-        seen_content = {m["content"] for m in core}
-        
+        # Merge core, episodes, and semantic, avoiding exact content duplicates
+        merged_memories = list(core) + list(episodes)
+        seen_content = {m["content"] for m in merged_memories}
+
         for m in semantic:
             if m["content"] not in seen_content:
                 merged_memories.append(m)

@@ -11,10 +11,25 @@ def _format_memories(memories: list[dict]) -> str:
     """Format retrieved memories for injection into the system prompt."""
     if not memories:
         return "No specific memories retrieved for this query."
-    lines = ["Relevant things you know about this user:"]
+    facts = []
+    past_sessions = []
     for m in memories:
-        lines.append(f"  - {m['content']}")
-    return "\n".join(lines)
+        c = m.get("content", "")
+        k = m.get("entity_key", "")
+        t = m.get("memory_type", "")
+        if t == "episodic" or "session." in k or "daily_digest." in k:
+            past_sessions.append(f"  • {c}")
+        else:
+            facts.append(f"  • {c}")
+
+    out = []
+    if facts:
+        out.append("CORE FACTS YOU REMEMBER ABOUT THIS USER:")
+        out.extend(facts)
+    if past_sessions:
+        out.append("\nPAST CONVERSATIONS & WHAT YOU DID TOGETHER (recent sessions / daily summaries):")
+        out.extend(past_sessions)
+    return "\n".join(out)
 
 
 def _format_working_memory(turns: list[dict]) -> list[dict]:

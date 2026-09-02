@@ -193,9 +193,9 @@ export function useVoice({ sendAudioChunk, sendBargein }) {
       };
 
       const now = ctx.currentTime;
-      // 120ms jitter buffer cushion when starting or when queue runs dry.
+      // 200ms jitter buffer cushion when starting or when queue runs dry.
       // Eliminates gaps, glitches, and mid-sentence stutter across internet packets.
-      const JITTER_BUFFER_LEAD_SEC = 0.12;
+      const JITTER_BUFFER_LEAD_SEC = 0.20;
       const startTime = nextPlayTimeRef.current > now
         ? nextPlayTimeRef.current
         : (now + JITTER_BUFFER_LEAD_SEC);

@@ -961,18 +961,36 @@ class RealtimeSessionHandler:
                 from sqlalchemy import select as sa_select
                 from app.models.session import SessionTurn
                 from sqlalchemy.ext.asyncio import AsyncSession
+                from app.models.memory import Memory
+                # 1. Fetch episodic memories (daily digests and session summaries)
+                ep_rows = await self.db.execute(
+                    sa_select(Memory)
+                    .where(Memory.user_id == self.user_id, Memory.memory_type == "episodic")
+                    .order_by(Memory.updated_at.desc())
+                    .limit(6)
+                )
+                episodes = ep_rows.scalars().all()
+
+                # 2. Fetch recent turns
                 rows = await self.db.execute(
                     sa_select(SessionTurn)
                     .where(SessionTurn.user_id == self.user_id)
                     .order_by(SessionTurn.created_at.desc())
-                    .limit(20)
+                    .limit(10)
                 )
                 turns = rows.scalars().all()
+
+                lines = []
+                if episodes:
+                    lines.append("Past session and day summaries:")
+                    for ep in episodes:
+                        lines.append(f"  • [{ep.entity_key}] {ep.content}")
                 if turns:
-                    lines = [f"- {t.role}: {t.content[:120]}" for t in turns]
-                    result = "Past conversation:\n" + "\n".join(lines)
-                else:
-                    result = "No past conversations found."
+                    lines.append("\nRecent conversation turns:")
+                    for t in reversed(turns):
+                        lines.append(f"  • {t.role}: {t.content[:100]}")
+
+                result = "\n".join(lines) if lines else "No past history found."
 
         except Exception as e:
             logger.error(f"[OS Tool] {name} failed: {e}")
