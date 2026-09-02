@@ -1095,7 +1095,7 @@ class RealtimeSessionHandler:
             logger.info(f"Session initialised for user {self.user_id}, persona={self.persona_id}")
 
         except Exception as e:
-            logger.error(f"Session initialisation failed for {self.user_id}: {e}")
+            logger.error(f"Session initialisation failed for {self.user_id}: {e}", exc_info=True)
             await self.send_to_client({
                 "type": "error",
                 "message": f"Failed to initialise voice session: {str(e)}",
@@ -1323,7 +1323,7 @@ async def handle_websocket(
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: user={user_id}")
     except Exception as e:
-        logger.error(f"WebSocket error for user {user_id}: {e}")
+        logger.error(f"WebSocket error for user {user_id}: {e}", exc_info=True)
         try:
             await websocket.send_text(json.dumps({
                 "type": "error",
