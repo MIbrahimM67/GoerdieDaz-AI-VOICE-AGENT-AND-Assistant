@@ -42,9 +42,18 @@ export default function BrainPanel() {
   };
 
   useEffect(() => {
-    fetchMemories();
-    const interval = setInterval(fetchMemories, 12000);
-    return () => clearInterval(interval);
+    fetchMemories(); // Initial load
+    // Poll every 30s only when tab is visible (was 12s always-on)
+    const interval = setInterval(() => {
+      if (!document.hidden) fetchMemories();
+    }, 30000);
+    // Also refresh when a voice response completes (event from useWebSocket)
+    const onMemoryUpdate = () => fetchMemories();
+    window.addEventListener('memory-updated', onMemoryUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('memory-updated', onMemoryUpdate);
+    };
   }, [accessToken]);
 
   return (
