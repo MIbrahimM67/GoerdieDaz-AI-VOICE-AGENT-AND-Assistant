@@ -112,8 +112,6 @@ class RealtimeSessionHandler:
         # ElevenLabs TTS (Geordie voice)
         self._use_elevenlabs = settings.use_elevenlabs
         self._elevenlabs_tts = None
-        # Open-source mode (Deepgram STT + Groq LLM)
-        self._deepgram: Optional["DeepgramVoiceHandler"] = None
 
 
     async def send_to_client(self, message: dict):
@@ -866,112 +864,6 @@ class RealtimeSessionHandler:
             self.voice_state = VoiceState.SPEAKING
             await self.send_to_client({"type": "state_change", "state": "speaking"})
 
-    # ── Open-source mode callbacks (Deepgram STT + Groq LLM) ──────────────
-
-    async def _on_deepgram_transcript(self, transcript: str):
-        """Called when Deepgram produces a final STT transcript."""
-        self._current_user_input = transcript
-        self.voice_state = VoiceState.PROCESSING
-        await self.send_to_client({
-            "type": "transcript",
-            "text": transcript,
-            "role": "user",
-        })
-
-    async def _on_deepgram_response_text(self, delta: str):
-        """Called for each Groq streaming text delta."""
-        self._current_response_text += delta
-        await self.send_to_client({
-            "type": "response.text.delta",
-            "delta": delta,
-        })
-
-    async def _on_deepgram_state_change(self, state: str):
-        """Called by Deepgram handler to signal voice state changes."""
-        state_map = {
-            "listening": VoiceState.LISTENING,
-            "processing": VoiceState.PROCESSING,
-            "speaking": VoiceState.SPEAKING,
-            "idle": VoiceState.IDLE,
-        }
-        self.voice_state = state_map.get(state, VoiceState.IDLE)
-        await self.send_to_client({"type": "state_change", "state": state})
-
-    async def _handle_tool_call_opensource(self, name: str, args: dict, call_id: str) -> str:
-        """
-        Execute a tool call from Groq and return the result string.
-        Mirrors the tool handling in _listen_openai but returns a result instead
-        of sending it back to OpenAI (Groq handles that via conversation history).
-        """
-        import json as _json
-        result = "Done."
-        try:
-            if name == "search_memory":
-                query = args.get("query", "")
-                logger.info(f"[OS Tool] search_memory: {query}")
-                results = await retrieve_relevant_memories(self.user_id, query, self.db, top_k=5)
-                if results:
-                    lines = [f"- {r.get('content', '')} (importance: {r.get('importance_score', 0):.2f})" for r in results]
-                    result = "Memory search results:\n" + "\n".join(lines)
-                else:
-                    result = "No relevant memories found."
-
-            elif name == "store_fact":
-                entity_key = args.get("entity_key", "")
-                content = args.get("content", "")
-                importance = float(args.get("importance", 0.7))
-                logger.info(f"[OS Tool] store_fact: {entity_key}")
-                if entity_key and content:
-                    from sqlalchemy import text as sa_text
-                    from sqlalchemy.dialects.postgresql import insert as pg_insert
-                    from app.models.memory import Memory
-                    embedding = await embed_text(content)
-                    stmt = pg_insert(Memory).values(
-                        id=str(uuid.uuid4()),
-                        user_id=self.user_id,
-                        entity_key=entity_key,
-                        content=content,
-                        memory_type="semantic",
-                        importance_score=importance,
-                        confidence_score=0.9,
-                        persona_id=self.persona_id,
-                        embedding=embedding,
-                        created_at=datetime.now(timezone.utc),
-                        updated_at=datetime.now(timezone.utc),
-                    ).on_conflict_do_update(
-                        index_elements=["entity_key", "user_id"],
-                        set_={"content": content, "importance_score": importance, "updated_at": datetime.now(timezone.utc)},
-                    )
-                    await self.db.execute(stmt)
-                    await self.db.commit()
-                    self._tool_stored_facts_this_turn = True
-                    result = f"Stored: {entity_key}"
-
-            elif name == "search_history":
-                query = args.get("query", "")
-                logger.info(f"[OS Tool] search_history: {query}")
-                from sqlalchemy import select as sa_select
-                from app.models.session import SessionTurn
-                from sqlalchemy.ext.asyncio import AsyncSession
-                rows = await self.db.execute(
-                    sa_select(SessionTurn)
-                    .where(SessionTurn.user_id == self.user_id)
-                    .order_by(SessionTurn.created_at.desc())
-                    .limit(20)
-                )
-                turns = rows.scalars().all()
-                if turns:
-                    lines = [f"- {t.role}: {t.content[:120]}" for t in turns]
-                    result = "Past conversation:\n" + "\n".join(lines)
-                else:
-                    result = "No past conversations found."
-
-        except Exception as e:
-            logger.error(f"[OS Tool] {name} failed: {e}")
-            result = f"Tool error: {e}"
-
-        return result
-
     async def _on_response_done(self):
         """Called when OpenAI completes a full response. Triggers post-turn processing."""
         self.voice_state = VoiceState.IDLE
@@ -1068,29 +960,11 @@ class RealtimeSessionHandler:
             max_tokens = response_rules.get("max_tokens", 150)
             system_prompt = state.get("assembled_system_prompt", "You are GeordieDaz.")
 
-            # ── Provider Branch ─────────────────────────────────────────────
-            if settings.use_opensource:
-                # Open-source mode: Deepgram STT + Groq LLM + ElevenLabs TTS
-                logger.info(f"Starting opensource voice pipeline (Deepgram+Groq) for user {self.user_id}")
-                from app.ws.deepgram_handler import DeepgramVoiceHandler
-                self._deepgram = DeepgramVoiceHandler(
-                    user_id=self.user_id,
-                    session_id=self.session_id,
-                    persona_id=self.persona_id,
-                    system_prompt=system_prompt,
-                    db=self.db,
-                    on_transcript=self._on_deepgram_transcript,
-                    on_response_text=self._on_deepgram_response_text,
-                    on_response_done=self._on_response_done,
-                    on_audio_chunk=self._on_elevenlabs_audio,
-                    on_tool_call=self._handle_tool_call_opensource,
-                    on_state_change=self._on_deepgram_state_change,
-                )
-                await self._deepgram.connect()
-            else:
-                # OpenAI Realtime mode
-                await self.connect_to_openai(system_prompt, voice_id, max_tokens)
-                self._openai_task = asyncio.create_task(self._listen_openai())
+            # Connect to OpenAI Realtime
+            await self.connect_to_openai(system_prompt, voice_id, max_tokens)
+
+            # Start listening to OpenAI events
+            self._openai_task = asyncio.create_task(self._listen_openai())
 
             logger.info(f"Session initialised for user {self.user_id}, persona={self.persona_id}")
 
@@ -1113,28 +987,21 @@ class RealtimeSessionHandler:
         msg_type = msg.get("type")
 
         if msg_type == "audio_chunk":
+            # Relay PCM16 audio to OpenAI
             audio_data = msg.get("data", "")
             if audio_data:
-                if settings.use_opensource and self._deepgram:
-                    # Route to Deepgram STT
-                    await self._deepgram.send_audio(audio_data)
-                else:
-                    # Route to OpenAI Realtime buffer
-                    await self.send_to_openai({
-                        "type": "input_audio_buffer.append",
-                        "audio": audio_data,
-                    })
+                await self.send_to_openai({
+                    "type": "input_audio_buffer.append",
+                    "audio": audio_data,  # base64 PCM16
+                })
 
         elif msg_type == "barge_in":
-            # User interrupted — cancel current response
-            self._audio_muted = True
+            # User interrupted — cancel current response + stop audio
+            self._audio_muted = True  # Block further audio forwarding
             self.voice_state = VoiceState.LISTENING
-            if settings.use_opensource and self._deepgram:
-                await self._deepgram.cancel_response()
-            else:
-                await self.send_to_openai({"type": "response.cancel"})
-                await self.send_to_openai({"type": "input_audio_buffer.clear"})
-            await self.send_to_client({"type": "barge_in_detected"})
+            await self.send_to_openai({"type": "response.cancel"})
+            await self.send_to_openai({"type": "input_audio_buffer.clear"})
+            await self.send_to_client({"type": "barge_in_detected"})  # Tell client to stop playback
             if self._agent_state:
                 self._agent_state["interrupted"] = True
             self._current_response_text = ""
@@ -1260,20 +1127,12 @@ class RealtimeSessionHandler:
             })
 
     async def close(self):
-        """Clean up connections and generate session summary."""
-        # Cancel OpenAI task (no-op in opensource mode)
+        """Clean up both WebSocket connections and generate session summary."""
         if self._openai_task and not self._openai_task.done():
             self._openai_task.cancel()
         if self.openai_ws:
             try:
                 await self.openai_ws.close()
-            except Exception:
-                pass
-
-        # Close Deepgram handler (opensource mode)
-        if self._deepgram:
-            try:
-                await self._deepgram.close()
             except Exception:
                 pass
 

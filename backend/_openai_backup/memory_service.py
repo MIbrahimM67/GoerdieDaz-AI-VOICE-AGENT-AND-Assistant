@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from app.services.llm_client import get_llm_client, get_chat_model
+from openai import AsyncOpenAI
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -190,7 +190,7 @@ async def write_memory_async(
     4. Embed content + store with vector
     5. Update Redis working memory
     """
-    client = get_llm_client()
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     extraction_prompt = f"""You are a fact extraction system for a personal AI assistant. Analyse this conversation turn and extract ALL meaningful facts and memories about the user.
 
@@ -251,7 +251,7 @@ Return ONLY valid JSON object with a "facts" key, no markdown, no explanation.""
 
     try:
         response = await client.chat.completions.create(
-            model=get_chat_model(),
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": extraction_prompt}],
             response_format={"type": "json_object"},
             max_tokens=800,

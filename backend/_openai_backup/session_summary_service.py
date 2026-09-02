@@ -17,7 +17,7 @@ import logging
 import uuid
 from datetime import datetime, timezone, timedelta, date as date_type
 
-from app.services.llm_client import get_llm_client, get_chat_model
+from openai import AsyncOpenAI
 from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -65,7 +65,7 @@ async def summarise_session(
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     persona_id = turns[0].persona_id if turns else "friendly_geordie"
 
-    client = get_llm_client()
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     prompt = f"""Summarise this conversation between GeordieDaz (an AI assistant) and the user.
 Focus on:
@@ -84,7 +84,7 @@ Write a concise 2-4 sentence summary. Start with "On {today}," — write as if l
 
     try:
         response = await client.chat.completions.create(
-            model=get_chat_model(),
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=200,
             temperature=0.3,
@@ -173,7 +173,7 @@ async def consolidate_daily_digest(
             f"- Session {i+1}: {s.content}" for i, s in enumerate(sessions)
         )
 
-        client = get_llm_client()
+        client = AsyncOpenAI(api_key=settings.openai_api_key)
         prompt = f"""You are summarising a user's entire day of conversations with GeordieDaz (their AI companion).
 
 Date: {date_str}
@@ -186,7 +186,7 @@ Write a single, cohesive 3-5 sentence summary of the user's day. Cover the key t
 
         try:
             response = await client.chat.completions.create(
-                model=get_chat_model(),
+                model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=300,
                 temperature=0.3,
