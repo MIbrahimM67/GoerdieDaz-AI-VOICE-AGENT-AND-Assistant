@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # ── Groq (used when llm_provider=opensource) ──────────────────
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "qwen/qwen3.8-27b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
 
     # ── Deepgram (STT, used when llm_provider=opensource) ─────────

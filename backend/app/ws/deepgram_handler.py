@@ -90,6 +90,7 @@ class DeepgramVoiceHandler:
         # State
         self.deepgram_ws = None
         self._dg_task: Optional[asyncio.Task] = None
+        self._keepalive_task: Optional[asyncio.Task] = None
         self._llm_client: AsyncOpenAI = get_llm_client()
         self._conversation_history: list[dict] = []
         self._current_response = ""
@@ -162,6 +163,7 @@ class DeepgramVoiceHandler:
             ping_timeout=5,
         )
         self._dg_task = asyncio.create_task(self._listen_deepgram())
+        self._keepalive_task = asyncio.create_task(self._keepalive_loop())
 
         # Connect ElevenLabs TTS
         if settings.use_elevenlabs:
@@ -171,6 +173,19 @@ class DeepgramVoiceHandler:
             logger.info("ElevenLabs TTS connected (opensource mode)")
 
         logger.info("Deepgram STT connected (opensource mode)")
+
+    async def _keepalive_loop(self):
+        """Periodically send KeepAlive to prevent Deepgram 1011 stream timeout."""
+        try:
+            while True:
+                await asyncio.sleep(5)
+                if self.deepgram_ws:
+                    try:
+                        await self.deepgram_ws.send(json.dumps({"type": "KeepAlive"}))
+                    except Exception:
+                        break
+        except asyncio.CancelledError:
+            pass
 
     async def send_audio(self, pcm16_b64: str):
         """Forward PCM16 audio chunk from browser to Deepgram."""
@@ -205,27 +220,39 @@ class DeepgramVoiceHandler:
             async for msg in self.deepgram_ws:
                 if isinstance(msg, bytes):
                     continue  # Ping/keepalive
-                event = json.loads(msg)
-                channel = event.get("channel", {})
-                alternatives = channel.get("alternatives", [{}])
-                transcript = alternatives[0].get("transcript", "").strip() if alternatives else ""
-                is_final = event.get("is_final", False)
-                speech_final = event.get("speech_final", False)
+                try:
+                    event = json.loads(msg)
+                    if not isinstance(event, dict):
+                        continue
+                    channel = event.get("channel")
+                    if not isinstance(channel, dict):
+                        continue
+                    alternatives = channel.get("alternatives")
+                    if not isinstance(alternatives, list) or not alternatives:
+                        continue
+                    alt = alternatives[0]
+                    if not isinstance(alt, dict):
+                        continue
+                    transcript = alt.get("transcript", "").strip()
+                    is_final = event.get("is_final", False)
+                    speech_final = event.get("speech_final", False)
 
-                if not transcript:
-                    continue
+                    if not transcript:
+                        continue
 
-                if not is_final:
-                    # Interim result — can use for early barge-in detection
-                    continue
+                    if not is_final:
+                        # Interim result — can use for early barge-in detection
+                        continue
 
-                # Final transcript from Deepgram
-                if speech_final or is_final:
-                    logger.info(f"Deepgram transcript (user {self.user_id}): '{transcript}'")
-                    await self._on_transcript(transcript)
-                    await self._on_state_change("processing")
-                    # Send to Groq
-                    asyncio.create_task(self._call_groq(transcript))
+                    # Final transcript from Deepgram
+                    if speech_final or is_final:
+                        logger.info(f"Deepgram transcript (user {self.user_id}): '{transcript}'")
+                        await self._on_transcript(transcript)
+                        await self._on_state_change("processing")
+                        # Send to Groq
+                        asyncio.create_task(self._call_groq(transcript))
+                except Exception as msg_err:
+                    logger.warning(f"Error processing Deepgram event: {msg_err}")
 
         except websockets.ConnectionClosed as e:
             logger.info(f"Deepgram WS closed for user {self.user_id}: {e}")
@@ -372,6 +399,8 @@ class DeepgramVoiceHandler:
         """Shut down Deepgram WS and ElevenLabs TTS."""
         if self._dg_task and not self._dg_task.done():
             self._dg_task.cancel()
+        if self._keepalive_task and not self._keepalive_task.done():
+            self._keepalive_task.cancel()
         if self.deepgram_ws:
             try:
                 await self.deepgram_ws.close()
