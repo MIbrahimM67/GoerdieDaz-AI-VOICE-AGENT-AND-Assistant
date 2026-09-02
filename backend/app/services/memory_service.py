@@ -330,7 +330,15 @@ Return ONLY valid JSON object with a "facts" key, no markdown, no explanation.""
                 is_duplicate = False
                 for existing in existing_memories:
                     if existing.embedding is not None:
-                        ex_array = np.array(existing.embedding)
+                        if isinstance(existing.embedding, str):
+                            import json
+                            try:
+                                ex_list = json.loads(existing.embedding)
+                            except Exception:
+                                ex_list = [float(x) for x in existing.embedding.strip("[]").split(",") if x.strip()]
+                            ex_array = np.array(ex_list, dtype=float)
+                        else:
+                            ex_array = np.array(existing.embedding, dtype=float)
                         ex_norm = np.linalg.norm(ex_array)
                         if emb_norm > 0 and ex_norm > 0:
                             similarity = float(np.dot(emb_array, ex_array) / (emb_norm * ex_norm))

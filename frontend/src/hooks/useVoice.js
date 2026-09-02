@@ -155,7 +155,7 @@ export function useVoice({ sendAudioChunk, sendBargein }) {
       const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
       playbackContextRef.current = ctx;
       const gain = ctx.createGain();
-      gain.gain.value = 1.0;
+      gain.gain.value = 0.85;
       gain.connect(ctx.destination);
       gainNodeRef.current = gain;
       activeSourcesRef.current = [];
