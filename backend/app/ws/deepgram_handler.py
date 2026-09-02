@@ -349,10 +349,10 @@ class DeepgramVoiceHandler:
                     if self._elevenlabs_tts and not self._audio_muted:
                         tts_buffer += delta.content
                         has_punct = any(p in delta.content for p in SENTENCE_PUNCTUATION)
-                        has_comma = ("," in delta.content or ":" in delta.content) and len(tts_buffer) >= 30
-                        is_long = len(tts_buffer) >= 60 and delta.content.endswith(" ")
+                        has_comma = ("," in delta.content or ":" in delta.content or "—" in delta.content) and len(tts_buffer) >= 15
+                        is_ready = len(tts_buffer) >= 35 and delta.content.endswith(" ")
 
-                        if has_punct or has_comma or is_long:
+                        if has_punct or has_comma or is_ready:
                             await self._elevenlabs_tts.send_text(tts_buffer)
                             tts_buffer = ""
 
@@ -435,10 +435,10 @@ class DeepgramVoiceHandler:
                         if self._elevenlabs_tts and not self._audio_muted:
                             tts_buffer2 += delta.content
                             has_punct = any(p in delta.content for p in SENTENCE_PUNCTUATION)
-                            has_comma = ("," in delta.content or ":" in delta.content) and len(tts_buffer2) >= 30
-                            is_long = len(tts_buffer2) >= 60 and delta.content.endswith(" ")
+                            has_comma = ("," in delta.content or ":" in delta.content or "—" in delta.content) and len(tts_buffer2) >= 15
+                            is_ready = len(tts_buffer2) >= 35 and delta.content.endswith(" ")
 
-                            if has_punct or has_comma or is_long:
+                            if has_punct or has_comma or is_ready:
                                 await self._elevenlabs_tts.send_text(tts_buffer2)
                                 tts_buffer2 = ""
 
