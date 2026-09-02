@@ -203,7 +203,7 @@ class DeepgramVoiceHandler:
         self._current_response = ""
         if self._elevenlabs_tts:
             try:
-                await self._elevenlabs_tts.flush()  # Clear TTS buffer
+                await self._elevenlabs_tts.cancel()
             except Exception:
                 pass
         await self._on_state_change("listening")
@@ -263,8 +263,11 @@ class DeepgramVoiceHandler:
         """
         Send user transcript to Groq, handle tool calls, stream response text to ElevenLabs.
         """
-        if self._audio_muted:
-            return
+        # Always unmute when a new user turn arrives
+        self._audio_muted = False
+        self._is_speaking = True
+        self._current_response = ""
+        await self._on_state_change("speaking")
 
         # Add user turn to history
         self._conversation_history.append({"role": "user", "content": user_text})
@@ -274,10 +277,12 @@ class DeepgramVoiceHandler:
             *self._conversation_history[-20:],  # Last 20 turns context window
         ]
 
-        self._current_response = ""
-        self._is_speaking = True
-        self._audio_muted = False
-        await self._on_state_change("speaking")
+        # Reconnect / prepare ElevenLabs stream for this response
+        if self._elevenlabs_tts:
+            try:
+                await self._elevenlabs_tts.ensure_connected()
+            except Exception as e:
+                logger.warning(f"ElevenLabs ensure_connected warning: {e}")
 
         try:
             # Streaming response from Groq

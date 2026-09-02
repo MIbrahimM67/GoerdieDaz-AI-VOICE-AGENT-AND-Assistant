@@ -2,6 +2,7 @@
 GeordieDaz — ElevenLabs TTS Streaming Service
 Streams text → ElevenLabs WebSocket → audio chunks back to caller.
 Uses eleven_flash_v2_5 for low-latency conversational TTS (~75ms).
+Handles per-utterance lifecycle and reconnection automatically.
 """
 import asyncio
 import base64
@@ -47,13 +48,36 @@ class ElevenLabsTTS:
         self._ws = None
         self._listen_task = None
         self._connected = False
-        self._reconnect_attempts = 0
-        self._max_reconnects = 3
+
+    @property
+    def is_connected(self) -> bool:
+        """Check if WebSocket connection is active and open."""
+        if not self._connected or not self._ws:
+            return False
+        try:
+            return getattr(self._ws, "state", None) and self._ws.state.name == "OPEN"
+        except Exception:
+            return False
+
+    async def ensure_connected(self):
+        """Ensure connection is open. If closed or finished, connect a fresh stream."""
+        if self.is_connected:
+            return
+        await self.connect()
 
     async def connect(self):
         """Open WebSocket connection to ElevenLabs streaming TTS."""
         if not self.api_key or not self.voice_id:
             raise ValueError("ElevenLabs API key and voice_id are required")
+
+        # Cancel previous listen task if still running
+        if self._listen_task and not self._listen_task.done():
+            self._listen_task.cancel()
+        if self._ws:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
 
         url = self.WS_URL.format(voice_id=self.voice_id)
         url += f"?model_id={self.model_id}&output_format={self.output_format}"
@@ -106,29 +130,25 @@ class ElevenLabsTTS:
 
                 if data.get("isFinal"):
                     logger.debug("ElevenLabs stream complete")
+                    self._connected = False
                     break
 
         except websockets.ConnectionClosed:
-            logger.info("ElevenLabs WS closed")
-            # Attempt auto-reconnect
-            if self._reconnect_attempts < self._max_reconnects:
-                self._reconnect_attempts += 1
-                logger.info(f"ElevenLabs reconnect attempt {self._reconnect_attempts}/{self._max_reconnects}")
-                await asyncio.sleep(0.5)
-                try:
-                    await self.connect()
-                except Exception as e:
-                    logger.error(f"ElevenLabs reconnect failed: {e}")
+            logger.debug("ElevenLabs WS closed")
+            self._connected = False
         except Exception as e:
             logger.error(f"ElevenLabs listen error: {e}")
+            self._connected = False
 
     async def send_text(self, text: str):
         """Stream a text chunk to ElevenLabs for TTS generation."""
-        if not self._connected or not self._ws:
-            logger.warning("ElevenLabs not connected — dropping text chunk")
+        if not text:
             return
 
         try:
+            if not self.is_connected:
+                await self.connect()
+
             await self._ws.send(json.dumps({
                 "text": text,
                 "try_trigger_generation": True,
@@ -138,14 +158,23 @@ class ElevenLabsTTS:
 
     async def flush(self):
         """Signal end of text input (EOS — End of Stream)."""
-        if not self._connected or not self._ws:
+        if not self.is_connected:
             return
 
         try:
             await self._ws.send(json.dumps({"text": ""}))
             logger.debug("ElevenLabs flush sent")
         except Exception as e:
-            logger.error(f"ElevenLabs flush error: {e}")
+            logger.debug(f"ElevenLabs flush note: {e}")
+
+    async def cancel(self):
+        """Cancel current utterance on barge-in."""
+        self._connected = False
+        if self._ws:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
 
     async def close(self):
         """Close the WebSocket connection."""
