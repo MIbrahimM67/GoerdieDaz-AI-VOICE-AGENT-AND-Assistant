@@ -106,6 +106,9 @@ class RealtimeSessionHandler:
         self._agent_state: Optional[AgentState] = None
         self._audio_muted = False  # Set during barge-in, cleared on new response
         self._transcript_event = asyncio.Event()  # Signalled when user transcript arrives
+        self._tool_stored_facts_this_turn = False  # Track if AI already stored facts via tool
+        self._turn_count = 0  # Track number of completed turns for session summary guard
+        self._last_persona_switch_time = 0.0  # Cooldown for persona switches (Fix #4)
         # ElevenLabs TTS (Geordie voice)
         self._use_elevenlabs = settings.use_elevenlabs
         self._elevenlabs_tts = None
@@ -572,6 +575,8 @@ class RealtimeSessionHandler:
                             await self.send_to_client({"type": "tool_activity", "tool": "search_memory", "status": "done"})
 
                     elif name == "store_fact":
+                        # Mark that AI stored facts via tool — skip duplicate extraction in post-turn
+                        self._tool_stored_facts_this_turn = True
                         # Notify frontend to show memory update animation
                         await self.send_to_client({
                             "type": "tool_activity",
@@ -946,6 +951,10 @@ class RealtimeSessionHandler:
         state["user_input"] = user_input
         state["response_text"] = response_text
         state["interrupted"] = False  # Reset — each turn decides independently
+        # FIX #1: Skip duplicate extraction if AI already stored facts via tool calls
+        state["skip_extraction"] = self._tool_stored_facts_this_turn
+        if self._tool_stored_facts_this_turn:
+            logger.info("Skipping background extraction — AI already stored facts via store_fact tool")
         try:
             await run_post_turn(state, self.db)
             logger.info("Post-turn completed successfully")
@@ -963,8 +972,11 @@ class RealtimeSessionHandler:
         except Exception as e:
             logger.error(f"Post-turn processing failed: {e}", exc_info=True)
 
+        # Reset per-turn state
         self._current_response_text = ""
         self._current_user_input = ""
+        self._tool_stored_facts_this_turn = False  # Reset for next turn
+        self._turn_count += 1
 
     async def initialise_session(self):
         """
@@ -1081,9 +1093,21 @@ class RealtimeSessionHandler:
         """
         Hot-swap persona (PRD Figure 4 — Persona Switch Flow).
         Memory is completely preserved — only system prompt and voice change.
+        FIX #4: 5-second cooldown to prevent rapid toggling (each switch creates a new Realtime session).
         """
         if not new_persona_id:
             return
+
+        # FIX #4: Cooldown — prevent rapid persona toggling
+        import time
+        now = time.time()
+        if now - self._last_persona_switch_time < 5.0:
+            await self.send_to_client({
+                "type": "error",
+                "message": "Whoa, slow down! Wait a few seconds before switching persona again.",
+            })
+            return
+        self._last_persona_switch_time = now
         try:
             config = await persona_manager.hot_swap(
                 user_id=self.user_id,
@@ -1164,16 +1188,20 @@ class RealtimeSessionHandler:
             except Exception:
                 pass
 
-        # Generate session summary for long-term memory
-        try:
-            from app.services.session_summary_service import summarise_session
-            await summarise_session(
-                user_id=self.user_id,
-                session_id=self.session_id,
-                db=self.db,
-            )
-        except Exception as e:
-            logger.warning(f"Session summary failed for user {self.user_id}: {e}")
+        # FIX #3: Only summarise sessions with 2+ completed turns.
+        # Prevents wasted GPT calls on dropped connections / very short sessions.
+        if self._turn_count >= 2:
+            try:
+                from app.services.session_summary_service import summarise_session
+                await summarise_session(
+                    user_id=self.user_id,
+                    session_id=self.session_id,
+                    db=self.db,
+                )
+            except Exception as e:
+                logger.warning(f"Session summary failed for user {self.user_id}: {e}")
+        else:
+            logger.info(f"Skipping session summary — only {self._turn_count} turns (need 2+)")
 
         logger.info(f"Session closed for user {self.user_id}")
 

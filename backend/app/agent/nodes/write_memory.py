@@ -14,7 +14,7 @@ async def write_memory(state: AgentState, config: RunnableConfig) -> AgentState:
     """
     After a completed turn, persist memories asynchronously.
     1. Update Redis working memory with this turn
-    2. Fire-and-forget: extract + persist facts to pgvector
+    2. Extract + persist facts to pgvector (SKIPPED if AI already stored via tool calls)
 
     This node does NOT block the response pipeline.
     """
@@ -27,14 +27,21 @@ async def write_memory(state: AgentState, config: RunnableConfig) -> AgentState:
     if not user_input or not response_text:
         return state
 
-    # 1. Update working memory (sync — fast Redis write)
+    # 1. Update working memory (sync — fast Redis write, always runs)
     try:
         await update_working_memory(user_id, "user", user_input, persona_id)
         await update_working_memory(user_id, "assistant", response_text, persona_id)
     except Exception as e:
         logger.warning(f"Working memory update failed: {e}")
 
-    # 2. Extract + persist facts to database (awaited, not fire-and-forget)
+    # 2. Extract + persist facts to database
+    # FIX #1: SKIP if the AI already stored facts via the store_fact tool this turn.
+    # This prevents DOUBLE extraction (tool call + background GPT = 2x the cost).
+    skip_extraction = state.get("skip_extraction", False)
+    if skip_extraction:
+        logger.info(f"Skipping background fact extraction — AI already used store_fact tool this turn")
+        return state
+
     turn_text = f"User said: {user_input}\nGeordieDaz replied: {response_text}"
     try:
         await write_memory_async(
