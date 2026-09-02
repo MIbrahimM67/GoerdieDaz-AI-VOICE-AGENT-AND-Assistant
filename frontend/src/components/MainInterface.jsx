@@ -4,12 +4,13 @@
  * Left: Neural Memory Bank | Center: Holographic Voice Orb Stage | Right: Live Transcript
  */
 import { useEffect, useRef, useState } from 'react';
-import { Power, AlertTriangle, X, User, RotateCcw, Activity, ShieldAlert, Radio } from 'lucide-react';
+import { Power, AlertTriangle, X, User, RotateCcw, Activity, ShieldAlert, Radio, Sliders } from 'lucide-react';
 import BrainPanel from './BrainPanel';
 import ConversationLog from './ConversationLog';
 import PersonaSwitcher from './PersonaSwitcher';
 import VoiceOrb from './VoiceOrb';
 import ClientProfileModal from './ClientProfileModal';
+import VoiceAccentModal from './VoiceAccentModal';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useVoice } from '../hooks/useVoice';
 import useAppStore from '../stores/appStore';
@@ -29,6 +30,7 @@ export default function MainInterface({ userId, accessToken }) {
 
   const [micError, setMicError] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(true);
   const [sessionSeconds, setSessionSeconds] = useState(0);
 
@@ -42,7 +44,7 @@ export default function MainInterface({ userId, accessToken }) {
   // ── Voice Hooks ───────────────────────────────────────────────
   const stopPlaybackRef = useRef(() => {});
 
-  const { sendAudioChunk, sendBargein, sendPersonaSwitch, disconnect, reconnect, sendNewSession } = useWebSocket({
+  const { sendAudioChunk, sendBargein, sendPersonaSwitch, sendVoiceSwitch, disconnect, reconnect, sendNewSession } = useWebSocket({
     userId,
     token: accessToken,
     onAudioChunk: (b64) => playAudioChunk(b64),
@@ -154,6 +156,20 @@ export default function MainInterface({ userId, accessToken }) {
           >
             <RotateCcw size={12} color="var(--accent)" />
             <span>NEW CONVERSATION</span>
+          </button>
+
+          <button
+            id="voice-accent-btn"
+            onClick={() => setVoiceModalOpen(true)}
+            style={{
+              ...s.hudBtn,
+              border: '1px solid rgba(0, 240, 255, 0.35)',
+              background: 'rgba(0, 240, 255, 0.05)',
+            }}
+            title="Calibrate ElevenLabs Voice Model & Spoken Accent Dialect"
+          >
+            <Sliders size={12} color="var(--accent)" />
+            <span>VOICE & ACCENT</span>
           </button>
         </div>
 
@@ -267,8 +283,13 @@ export default function MainInterface({ userId, accessToken }) {
           <ConversationLog />
         </main>
 
-      {/* Profile Modal */}
+      {/* Modals */}
       <ClientProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
+      <VoiceAccentModal
+        isOpen={voiceModalOpen}
+        onClose={() => setVoiceModalOpen(false)}
+        onApply={(voiceId, accent) => sendVoiceSwitch(voiceId, accent)}
+      />
     </div>
   );
 }

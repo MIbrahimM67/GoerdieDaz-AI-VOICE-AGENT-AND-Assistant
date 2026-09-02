@@ -59,6 +59,22 @@ class ElevenLabsTTS:
         except Exception:
             return False
 
+    async def set_voice(self, new_voice_id: str):
+        """Hot-swap active ElevenLabs voice ID."""
+        if not new_voice_id or new_voice_id == self.voice_id:
+            return
+        logger.info(f"ElevenLabs switching voice: {self.voice_id} → {new_voice_id}")
+        self.voice_id = new_voice_id
+        self._connected = False
+        if self._listen_task and not self._listen_task.done():
+            self._listen_task.cancel()
+        if self._ws:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+            self._ws = None
+
     async def ensure_connected(self):
         """Ensure connection is open. If closed or finished, connect a fresh stream."""
         if self.is_connected:

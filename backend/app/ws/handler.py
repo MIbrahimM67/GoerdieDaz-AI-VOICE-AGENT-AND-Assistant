@@ -84,6 +84,28 @@ class VoiceState:
     INTERRUPTED = "interrupted"
 
 
+ACCENT_INSTRUCTIONS = {
+    "geordie": """
+ACCENT & VOCABULARY (GEORDIE):
+- Speak in natural, authentic Newcastle / Geordie dialect.
+- Signature phrases to use naturally: "Now look here, pet...", "Tell you what...", "Howay", "Canny", "Wey aye", "Bonny lad", "Wor kid", "The Toon", "Nowt", "Collywobbles".
+- Maintain the warm, calm, unhurried Alan Robson late-night radio cadence.
+""",
+    "british": """
+ACCENT & VOCABULARY (STANDARD BRITISH):
+- Speak in warm, conversational standard British English (not regional slang).
+- Signature phrases to use naturally: "Right then, mate...", "Tell you what...", "Brilliant", "Spot on", "Proper", "Cheers", "No worries at all", "Blimey".
+- Maintain the warm, calm, unhurried Alan Robson late-night radio cadence.
+""",
+    "american": """
+ACCENT & VOCABULARY (AMERICAN):
+- Speak in relaxed, warm conversational American English (not regional slang).
+- Signature phrases to use naturally: "Hey there buddy...", "Tell you what...", "Awesome", "Pretty cool", "You bet", "Folks", "Take care".
+- Maintain the warm, calm, unhurried Alan Robson late-night radio cadence.
+""",
+}
+
+
 class RealtimeSessionHandler:
     """
     Manages a single user's voice session.
@@ -92,13 +114,23 @@ class RealtimeSessionHandler:
       - openai_ws:  Our Backend ↔ OpenAI Realtime API
     """
 
-    def __init__(self, user_id: str, client_ws: WebSocket, db: AsyncSession, initial_persona_id: Optional[str] = None):
+    def __init__(
+        self,
+        user_id: str,
+        client_ws: WebSocket,
+        db: AsyncSession,
+        initial_persona_id: Optional[str] = None,
+        initial_voice_id: Optional[str] = None,
+        initial_accent: Optional[str] = None,
+    ):
         self.user_id = user_id
         self.client_ws = client_ws
         self.db = db
         self.session_id = str(uuid.uuid4())
         self._initial_persona_id = initial_persona_id
         self.persona_id = initial_persona_id or "friendly_geordie"
+        self._current_voice_id = initial_voice_id or settings.elevenlabs_voice_id
+        self._current_accent = initial_accent or "geordie"
         self.voice_state = VoiceState.IDLE
         self.openai_ws: Optional[websockets.WebSocketClientProtocol] = None
         self._openai_task: Optional[asyncio.Task] = None
@@ -1110,10 +1142,14 @@ class RealtimeSessionHandler:
             max_tokens = response_rules.get("max_tokens", 150)
             system_prompt = state.get("assembled_system_prompt", "You are GeordieDaz.")
 
+            # Apply accent modifier to system prompt if accent is customized
+            if self._current_accent and self._current_accent != "geordie":
+                system_prompt = system_prompt + "\n" + ACCENT_INSTRUCTIONS.get(self._current_accent, "")
+
             # ── Provider Branch ─────────────────────────────────────────────
             if settings.use_opensource:
                 # Open-source mode: Deepgram STT + Groq LLM + ElevenLabs TTS
-                logger.info(f"Starting opensource voice pipeline (Deepgram+Groq) for user {self.user_id}")
+                logger.info(f"Starting opensource voice pipeline (Deepgram+Groq) for user {self.user_id}, voice={self._current_voice_id}, accent={self._current_accent}")
                 from app.ws.deepgram_handler import DeepgramVoiceHandler
                 self._deepgram = DeepgramVoiceHandler(
                     user_id=self.user_id,
@@ -1127,6 +1163,8 @@ class RealtimeSessionHandler:
                     on_audio_chunk=self._on_elevenlabs_audio,
                     on_tool_call=self._handle_tool_call_opensource,
                     on_state_change=self._on_deepgram_state_change,
+                    voice_id=self._current_voice_id,
+                    accent=self._current_accent,
                 )
                 await self._deepgram.connect()
             else:
@@ -1134,14 +1172,20 @@ class RealtimeSessionHandler:
                 await self.connect_to_openai(system_prompt, voice_id, max_tokens)
                 self._openai_task = asyncio.create_task(self._listen_openai())
 
-            logger.info(f"Session initialised for user {self.user_id}, persona={self.persona_id}")
-            # Broadcast confirmed active persona to client immediately so HUD never desyncs!
+            logger.info(f"Session initialised for user {self.user_id}, persona={self.persona_id}, voice={self._current_voice_id}, accent={self._current_accent}")
+            # Broadcast confirmed active persona and voice to client immediately so HUD never desyncs!
             await self.send_to_client({
                 "type": "persona_switched",
                 "persona_id": self.persona_id,
                 "persona_name": persona_config.get("name", self.persona_id),
                 "ui_theme_color": persona_config.get("ui_theme_color", "#00f0ff"),
                 "message": f"Active persona: {persona_config.get('name')}",
+            })
+            await self.send_to_client({
+                "type": "voice_switched",
+                "voice_id": self._current_voice_id,
+                "accent": self._current_accent,
+                "message": f"Active voice: {self._current_voice_id}, accent: {self._current_accent}",
             })
 
         except Exception as e:
@@ -1194,6 +1238,12 @@ class RealtimeSessionHandler:
             # Hot-swap persona without losing memory
             new_persona_id = msg.get("persona_id", "")
             await self._handle_persona_switch(new_persona_id)
+
+        elif msg_type == "voice_switch":
+            # Hot-swap voice model ID and/or accent dialect instructions
+            new_voice_id = msg.get("voice_id")
+            new_accent = msg.get("accent")
+            await self._handle_voice_switch(new_voice_id, new_accent)
 
         elif msg_type == "ping":
             await self.send_to_client({"type": "pong"})
@@ -1325,6 +1375,46 @@ class RealtimeSessionHandler:
                 "message": f"Unknown persona: {new_persona_id}",
             })
 
+    async def _handle_voice_switch(self, new_voice_id: Optional[str], new_accent: Optional[str]):
+        """
+        Hot-swap active ElevenLabs voice ID and/or accent dialect instructions.
+        """
+        changed = False
+        if new_voice_id and new_voice_id != self._current_voice_id:
+            self._current_voice_id = new_voice_id
+            if self._deepgram:
+                await self._deepgram.set_voice(new_voice_id)
+            logger.info(f"Voice switched: user={self.user_id} → {new_voice_id}")
+            changed = True
+
+        if new_accent and new_accent in ("geordie", "british", "american"):
+            self._current_accent = new_accent
+            if self._deepgram and self._agent_state:
+                base_prompt = self._agent_state.get("assembled_system_prompt", "")
+                accent_addon = ACCENT_INSTRUCTIONS.get(new_accent, "")
+                self._deepgram.system_prompt = base_prompt + "\n" + accent_addon + MEMORY_TOOL_INSTRUCTIONS
+                self._deepgram.set_accent(new_accent)
+            logger.info(f"Accent switched: user={self.user_id} → {new_accent}")
+            changed = True
+
+        if changed:
+            try:
+                from app.redis_client import get_redis
+                redis = get_redis()
+                await redis.hset(
+                    f"user:{self.user_id}:voice_settings",
+                    mapping={"voice_id": self._current_voice_id, "accent": self._current_accent},
+                )
+            except Exception as e:
+                logger.debug(f"Failed to persist voice settings in Redis: {e}")
+
+        await self.send_to_client({
+            "type": "voice_switched",
+            "voice_id": self._current_voice_id,
+            "accent": self._current_accent,
+            "message": f"Active voice and accent updated.",
+        })
+
     async def close(self):
         """Clean up connections and generate session summary."""
         # Cancel OpenAI task (no-op in opensource mode)
@@ -1379,15 +1469,24 @@ async def handle_websocket(
     user_id: str,
     db: AsyncSession,
     initial_persona_id: Optional[str] = None,
+    initial_voice_id: Optional[str] = None,
+    initial_accent: Optional[str] = None,
 ):
     """
     Main WebSocket handler — entry point for /ws/{user_id}.
     Auth is verified by the route before this is called.
     """
     await websocket.accept()
-    logger.info(f"WebSocket connected: user={user_id}, persona_param={initial_persona_id}")
+    logger.info(f"WebSocket connected: user={user_id}, persona={initial_persona_id}, voice={initial_voice_id}, accent={initial_accent}")
 
-    handler = RealtimeSessionHandler(user_id=user_id, client_ws=websocket, db=db, initial_persona_id=initial_persona_id)
+    handler = RealtimeSessionHandler(
+        user_id=user_id,
+        client_ws=websocket,
+        db=db,
+        initial_persona_id=initial_persona_id,
+        initial_voice_id=initial_voice_id,
+        initial_accent=initial_accent,
+    )
 
     try:
         # Initialise the session (runs LangGraph pre-turn, connects to OpenAI)

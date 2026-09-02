@@ -149,4 +149,13 @@ async def websocket_endpoint(
             return
 
         initial_persona_id = websocket.query_params.get("persona_id")
-        await handle_websocket(websocket, user_id=str(user.id), db=db, initial_persona_id=initial_persona_id)
+        initial_voice_id = websocket.query_params.get("voice_id")
+        initial_accent = websocket.query_params.get("accent")
+        await handle_websocket(
+            websocket,
+            user_id=str(user.id),
+            db=db,
+            initial_persona_id=initial_persona_id,
+            initial_voice_id=initial_voice_id,
+            initial_accent=initial_accent,
+        )

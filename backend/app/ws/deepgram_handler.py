@@ -71,12 +71,16 @@ class DeepgramVoiceHandler:
         on_audio_chunk: Callable,       # async fn(b64: str)
         on_tool_call: Callable,         # async fn(name: str, args: dict, call_id: str)
         on_state_change: Callable,      # async fn(state: str)
+        voice_id: Optional[str] = None,
+        accent: Optional[str] = None,
     ):
         self.user_id = user_id
         self.session_id = session_id
         self.persona_id = persona_id
         self.system_prompt = system_prompt
         self.db = db
+        self.voice_id = voice_id or settings.elevenlabs_voice_id
+        self.accent = accent or "geordie"
 
         # Callbacks to parent handler
         self._on_transcript = on_transcript
@@ -188,9 +192,9 @@ class DeepgramVoiceHandler:
         # Connect ElevenLabs TTS
         if settings.use_elevenlabs:
             from app.services.elevenlabs_service import ElevenLabsTTS
-            self._elevenlabs_tts = ElevenLabsTTS(on_audio_chunk=self._on_audio_chunk)
+            self._elevenlabs_tts = ElevenLabsTTS(voice_id=self.voice_id, on_audio_chunk=self._on_audio_chunk)
             await self._elevenlabs_tts.connect()
-            logger.info("ElevenLabs TTS connected (opensource mode)")
+            logger.info(f"ElevenLabs TTS connected (opensource mode, voice={self.voice_id})")
 
         logger.info("Deepgram STT connected (opensource mode)")
 
@@ -238,6 +242,16 @@ class DeepgramVoiceHandler:
 
     def unmute(self):
         self._audio_muted = False
+
+    async def set_voice(self, new_voice_id: str):
+        """Update active ElevenLabs voice ID."""
+        self.voice_id = new_voice_id
+        if self._elevenlabs_tts:
+            await self._elevenlabs_tts.set_voice(new_voice_id)
+
+    def set_accent(self, new_accent: str):
+        """Update active accent identifier."""
+        self.accent = new_accent
 
     async def _listen_deepgram(self):
         """

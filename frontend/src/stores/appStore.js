@@ -33,6 +33,20 @@ const useAppStore = create((set, get) => ({
   },
   setAvailablePersonas: (personas) => set({ availablePersonas: personas }),
 
+  // ── Voice Model & Accent ──────────────────────────────────
+  currentVoiceId: localStorage.getItem('geordiedaz_voice_id') || 'zik8E6YgP11SlhQImASg',
+  currentAccent: localStorage.getItem('geordiedaz_accent') || 'geordie',
+  setVoiceAndAccent: (voiceId, accent) => {
+    if (voiceId) {
+      localStorage.setItem('geordiedaz_voice_id', voiceId);
+      set({ currentVoiceId: voiceId });
+    }
+    if (accent) {
+      localStorage.setItem('geordiedaz_accent', accent);
+      set({ currentAccent: accent });
+    }
+  },
+
   // ── Voice State ───────────────────────────────────────────
   // State machine: idle → listening → processing → speaking → (interrupted →) idle
   voiceState: 'idle',  // 'idle' | 'listening' | 'processing' | 'speaking' | 'interrupted'

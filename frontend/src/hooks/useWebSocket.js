@@ -40,7 +40,9 @@ export function useWebSocket({ userId, token, onAudioChunk, onBargeIn }) {
 
     const activePersona = useAppStore.getState().currentPersona;
     const personaId = activePersona?.id || 'friendly_geordie';
-    const url = `${WS_BASE}/${userId}?token=${token}&persona_id=${personaId}`;
+    const voiceId = useAppStore.getState().currentVoiceId || 'zik8E6YgP11SlhQImASg';
+    const accent = useAppStore.getState().currentAccent || 'geordie';
+    const url = `${WS_BASE}/${userId}?token=${token}&persona_id=${personaId}&voice_id=${voiceId}&accent=${accent}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
@@ -152,6 +154,13 @@ export function useWebSocket({ userId, token, onAudioChunk, onBargeIn }) {
         console.log('[WS] Persona switched to:', msg.persona_name);
         break;
 
+      case 'voice_switched':
+        if (msg.voice_id || msg.accent) {
+          useAppStore.getState().setVoiceAndAccent(msg.voice_id, msg.accent);
+        }
+        console.log('[WS] Voice/accent switched:', msg.voice_id, msg.accent);
+        break;
+
       case 'barge_in_detected':
         setVoiceState('interrupted');
         aiResponseRef.current = ''; // Discard partial AI response
@@ -196,6 +205,13 @@ export function useWebSocket({ userId, token, onAudioChunk, onBargeIn }) {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'persona_switch', persona_id: personaId }));
     }
+  }, []);
+
+  const sendVoiceSwitch = useCallback((voiceId, accent) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'voice_switch', voice_id: voiceId, accent: accent }));
+    }
+    useAppStore.getState().setVoiceAndAccent(voiceId, accent);
   }, []);
 
   const sendPing = useCallback(() => {
@@ -254,5 +270,5 @@ export function useWebSocket({ userId, token, onAudioChunk, onBargeIn }) {
     };
   }, [userId, token]);
 
-  return { sendAudioChunk, sendBargein, sendPersonaSwitch, disconnect, reconnect, sendNewSession };
+  return { sendAudioChunk, sendBargein, sendPersonaSwitch, sendVoiceSwitch, disconnect, reconnect, sendNewSession };
 }
