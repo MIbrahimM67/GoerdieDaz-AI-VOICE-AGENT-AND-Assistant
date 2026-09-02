@@ -38,7 +38,9 @@ export function useWebSocket({ userId, token, onAudioChunk, onBargeIn }) {
   const connect = useCallback(() => {
     if (!userId || !token) return;
 
-    const url = `${WS_BASE}/${userId}?token=${token}`;
+    const activePersona = useAppStore.getState().currentPersona;
+    const personaId = activePersona?.id || 'friendly_geordie';
+    const url = `${WS_BASE}/${userId}?token=${token}&persona_id=${personaId}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 

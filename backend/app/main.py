@@ -135,6 +135,7 @@ async def websocket_endpoint(
     """
     Real-time voice WebSocket endpoint.
     Auth via ?token=JWT query parameter (WS cannot send HTTP headers).
+    Optional ?persona_id=friendly_geordie | driving_banter
     """
     async with AsyncSessionLocal() as db:
         # Authenticate WebSocket connection
@@ -147,4 +148,5 @@ async def websocket_endpoint(
             await websocket.close(code=4003, reason="User ID mismatch")
             return
 
-        await handle_websocket(websocket, user_id=str(user.id), db=db)
+        initial_persona_id = websocket.query_params.get("persona_id")
+        await handle_websocket(websocket, user_id=str(user.id), db=db, initial_persona_id=initial_persona_id)

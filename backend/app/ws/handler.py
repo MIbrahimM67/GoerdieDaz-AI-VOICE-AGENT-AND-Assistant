@@ -92,12 +92,13 @@ class RealtimeSessionHandler:
       - openai_ws:  Our Backend ↔ OpenAI Realtime API
     """
 
-    def __init__(self, user_id: str, client_ws: WebSocket, db: AsyncSession):
+    def __init__(self, user_id: str, client_ws: WebSocket, db: AsyncSession, initial_persona_id: Optional[str] = None):
         self.user_id = user_id
         self.client_ws = client_ws
         self.db = db
         self.session_id = str(uuid.uuid4())
-        self.persona_id = "friendly_geordie"
+        self._initial_persona_id = initial_persona_id
+        self.persona_id = initial_persona_id or "friendly_geordie"
         self.voice_state = VoiceState.IDLE
         self.openai_ws: Optional[websockets.WebSocketClientProtocol] = None
         self._openai_task: Optional[asyncio.Task] = None
@@ -1067,6 +1068,16 @@ class RealtimeSessionHandler:
             except Exception as e:
                 logger.warning(f"Daily digest backfill failed (non-fatal): {e}")
 
+            # If client explicitly provided a persona_id in query params, enforce it!
+            if self._initial_persona_id:
+                self.persona_id = self._initial_persona_id
+                from app.services.persona_service import persona_manager
+                await persona_manager.hot_swap(
+                    user_id=self.user_id,
+                    new_persona_id=self._initial_persona_id,
+                    session_id=self.session_id,
+                )
+
             # Run pre-turn graph (loads session, retrieves memory, assembles context)
             state = await run_pre_turn(
                 user_id=self.user_id,
@@ -1076,7 +1087,8 @@ class RealtimeSessionHandler:
                 db=self.db,
             )
             self._agent_state = state
-            self.persona_id = state.get("persona_id", "friendly_geordie")
+            if not self._initial_persona_id:
+                self.persona_id = state.get("persona_id", "friendly_geordie")
             # Sync session_id — load_session may have loaded it from Redis
             self.session_id = state.get("session_id", self.session_id)
 
@@ -1113,6 +1125,14 @@ class RealtimeSessionHandler:
                 self._openai_task = asyncio.create_task(self._listen_openai())
 
             logger.info(f"Session initialised for user {self.user_id}, persona={self.persona_id}")
+            # Broadcast confirmed active persona to client immediately so HUD never desyncs!
+            await self.send_to_client({
+                "type": "persona_switched",
+                "persona_id": self.persona_id,
+                "persona_name": persona_config.get("name", self.persona_id),
+                "ui_theme_color": persona_config.get("ui_theme_color", "#00f0ff"),
+                "message": f"Active persona: {persona_config.get('name')}",
+            })
 
         except Exception as e:
             logger.error(f"Session initialisation failed for {self.user_id}: {e}", exc_info=True)
@@ -1199,16 +1219,17 @@ class RealtimeSessionHandler:
         if not new_persona_id:
             return
 
-        # FIX #4: Cooldown — prevent rapid persona toggling
-        import time
-        now = time.time()
-        if now - self._last_persona_switch_time < 5.0:
-            await self.send_to_client({
-                "type": "error",
-                "message": "Whoa, slow down! Wait a few seconds before switching persona again.",
-            })
-            return
-        self._last_persona_switch_time = now
+        # Cooldown only needed for OpenAI Realtime API mode (slow TLS reconnects)
+        if not settings.use_opensource:
+            import time
+            now = time.time()
+            if now - self._last_persona_switch_time < 3.0:
+                await self.send_to_client({
+                    "type": "error",
+                    "message": "Whoa, slow down! Wait a few seconds before switching persona again.",
+                })
+                return
+            self._last_persona_switch_time = now
         try:
             config = await persona_manager.hot_swap(
                 user_id=self.user_id,
@@ -1326,15 +1347,16 @@ async def handle_websocket(
     websocket: WebSocket,
     user_id: str,
     db: AsyncSession,
+    initial_persona_id: Optional[str] = None,
 ):
     """
     Main WebSocket handler — entry point for /ws/{user_id}.
     Auth is verified by the route before this is called.
     """
     await websocket.accept()
-    logger.info(f"WebSocket connected: user={user_id}")
+    logger.info(f"WebSocket connected: user={user_id}, persona_param={initial_persona_id}")
 
-    handler = RealtimeSessionHandler(user_id=user_id, client_ws=websocket, db=db)
+    handler = RealtimeSessionHandler(user_id=user_id, client_ws=websocket, db=db, initial_persona_id=initial_persona_id)
 
     try:
         # Initialise the session (runs LangGraph pre-turn, connects to OpenAI)
