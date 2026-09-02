@@ -2,7 +2,7 @@ import os
 import requests
 
 API_KEY = "sk_39e7eb21ffc62606d2313322dd40fde288a90d5b683a423a"
-VOICE_ID = "niBvU6AgoHXAukAUYWI3"
+VOICE_ID = "zik8E6YgP11SlhQImASg"
 
 # eleven_v3 supports audio tags like [laughs], [whispers], [sighs] etc.
 # eleven_flash_v2_5 does NOT support audio tags — it reads them as text!
