@@ -115,6 +115,10 @@ export default function MainInterface({ userId, accessToken }) {
     clearTurns();
     sendNewSession();
     setSessionSeconds(0);
+    // Refresh Neural Memory Bank after summary writes
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('memory-updated'));
+    }, 1200);
   };
 
   const fmtTime = (s) => {
@@ -142,17 +146,15 @@ export default function MainInterface({ userId, accessToken }) {
         <div style={s.centerControls}>
           <PersonaSwitcher onSwitch={handlePersonaSwitch} />
 
-          {isSessionActive && (
-            <button
-              id="new-convo-btn"
-              onClick={handleNewConversation}
-              style={s.hudBtn}
-              title="Reset Conversation Buffer & Summarize"
-            >
-              <RotateCcw size={12} color="var(--accent)" />
-              <span>NEW CONVERSATION</span>
-            </button>
-          )}
+          <button
+            id="new-convo-btn"
+            onClick={handleNewConversation}
+            style={s.hudBtn}
+            title="Reset Conversation Buffer & Summarize"
+          >
+            <RotateCcw size={12} color="var(--accent)" />
+            <span>NEW CONVERSATION</span>
+          </button>
         </div>
 
         {/* Right: Telemetry & Power */}

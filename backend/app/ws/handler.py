@@ -1193,9 +1193,19 @@ class RealtimeSessionHandler:
                 logger.info(f"Session {self.session_id[:12]}... summarised before new session")
             except Exception as e:
                 logger.warning(f"Session summary failed on new_session: {e}")
-            # Reset session ID so the next connection gets a fresh one
+            # Reset session ID and turn counter so next conversation starts fresh
             import uuid as uuid_mod
             self.session_id = str(uuid_mod.uuid4())
+            self._turn_count = 0
+            try:
+                from app.redis_client import get_redis
+                redis = get_redis()
+                session_key = f"session:{self.user_id}"
+                await redis.hset(session_key, "session_id", self.session_id)
+                await redis.hset(session_key, "turn_index", 0)
+            except Exception as e:
+                logger.debug(f"Failed to reset session in Redis: {e}")
+            await self.send_to_client({"type": "memory_updated"})
 
         elif msg_type == "commit_audio":
             # Manually commit audio buffer (for push-to-talk mode)
@@ -1331,6 +1341,17 @@ class RealtimeSessionHandler:
             logger.info(f"Skipping session summary — only {self._turn_count} turns (need 2+)")
 
         logger.info(f"Session closed for user {self.user_id}")
+
+        # Rotate session ID in Redis so the next connection starts a fresh session
+        try:
+            from app.redis_client import get_redis
+            import uuid as uuid_mod
+            redis = get_redis()
+            session_key = f"session:{self.user_id}"
+            await redis.hset(session_key, "session_id", str(uuid_mod.uuid4()))
+            await redis.hset(session_key, "turn_index", 0)
+        except Exception:
+            pass
 
 
 # ─── FastAPI WebSocket Endpoint Handler ────────────────────────────────────

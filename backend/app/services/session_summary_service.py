@@ -94,8 +94,9 @@ Write a concise 2-4 sentence summary. Start with "On {today}," — write as if l
         logger.error(f"Session summary generation failed: {e}")
         return
 
-    # Store as episodic memory
-    entity_key = f"session.{today}.{session_id[:8]}"
+    # Store as episodic memory with timestamp so each conversation test gets its own distinct memory card
+    time_tag = datetime.now(timezone.utc).strftime("%H%M%S")
+    entity_key = f"session.{today}.{time_tag}.{session_id[:6]}"
     try:
         embedding = await embed_text(summary)
         stmt = pg_insert(Memory).values(
@@ -110,7 +111,15 @@ Write a concise 2-4 sentence summary. Start with "On {today}," — write as if l
             embedding=embedding,
             updated_at=datetime.now(timezone.utc),
         )
-        stmt = stmt.on_conflict_do_nothing()
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["user_id", "entity_key"],
+            index_where=text("entity_key IS NOT NULL"),
+            set_={
+                "content": summary,
+                "embedding": embedding,
+                "updated_at": datetime.now(timezone.utc),
+            },
+        )
         await db.execute(stmt)
         await db.commit()
         logger.info(f"Session summary stored: key={entity_key} for user {user_id}")

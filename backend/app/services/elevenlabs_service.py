@@ -97,8 +97,8 @@ class ElevenLabsTTS:
             bos_message = {
                 "text": " ",
                 "voice_settings": {
-                    "stability": 0.75,
-                    "similarity_boost": 0.80,
+                    "stability": 0.88,
+                    "similarity_boost": 0.85,
                     "style": 0.0,
                     "use_speaker_boost": False,
                     "speed": 0.90,
