@@ -120,9 +120,9 @@ class RealtimeSessionHandler:
         duration_seconds: float = 0.0,
         metadata: Optional[dict] = None,
     ):
-        """Log usage to DB and push real-time telemetry event to client WebSocket."""
+        """Log usage to DB for LangSmith / internal cost tracking."""
         try:
-            telemetry_data = await log_usage(
+            await log_usage(
                 db=self.db,
                 user_id=self.user_id,
                 service=service,
@@ -133,11 +133,6 @@ class RealtimeSessionHandler:
                 duration_seconds=duration_seconds,
                 metadata=metadata,
             )
-            if telemetry_data and isinstance(telemetry_data, dict):
-                await self.send_to_client({
-                    "type": "telemetry_event",
-                    "telemetry": telemetry_data,
-                })
         except Exception as e:
             logger.warning(f"Telemetry emission failed (non-fatal): {e}")
 
