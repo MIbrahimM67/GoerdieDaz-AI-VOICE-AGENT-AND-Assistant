@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api import auth, memory, persona, session, usage
+from app.api import auth, memory, persona, session
 from app.config import get_settings
 from app.database import AsyncSessionLocal, get_db
 from app.middleware.auth_middleware import get_ws_user
@@ -117,7 +117,6 @@ app.include_router(auth.router)
 app.include_router(persona.router)
 app.include_router(session.router)
 app.include_router(memory.router)
-app.include_router(usage.router)
 
 
 @app.get("/health", tags=["system"])

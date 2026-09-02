@@ -265,23 +265,6 @@ Return ONLY valid JSON object with a "facts" key, no markdown, no explanation.""
             facts = data
         logger.info(f"Extraction for user {user_id}: {len(facts)} facts found in turn")
 
-        # Log usage for cost tracking (non-fatal)
-        try:
-            usage = response.usage
-            if usage:
-                from app.services.usage_service import log_usage
-                await log_usage(
-                    db=db,
-                    user_id=user_id,
-                    service="gpt4o_extraction",
-                    operation="extract_facts",
-                    tokens_in=usage.prompt_tokens,
-                    tokens_out=usage.completion_tokens,
-                    metadata={"model": "gpt-4o-mini", "facts_found": len(facts)},
-                )
-        except Exception as usage_err:
-            logger.debug(f"Usage logging failed (non-fatal): {usage_err}")
-
     except Exception as e:
         logger.error(f"Memory extraction LLM call failed for user {user_id}: {e}")
         return
