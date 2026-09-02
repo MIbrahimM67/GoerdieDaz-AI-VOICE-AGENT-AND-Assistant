@@ -317,9 +317,11 @@ Return ONLY valid JSON object with a "facts" key, no markdown, no explanation.""
             content = fact.get("content", "").strip()
             importance = float(fact.get("importance_score", 0.0))
             entity_key = fact.get("entity_key")
+            if entity_key:
+                entity_key = entity_key.replace("_", ".").strip()
 
-            # Dedup: skip if a very similar fact already exists (cosine > 0.92)
-            # This prevents near-duplicate facts from piling up
+            # Dedup & Update: if a matching entity exists, allow update (newer fact wins)
+            # Only skip if it's truly a redundant re-statement of the same fact
             if existing_memories:
                 from pgvector.sqlalchemy import Vector
                 import numpy as np
@@ -332,13 +334,17 @@ Return ONLY valid JSON object with a "facts" key, no markdown, no explanation.""
                         ex_norm = np.linalg.norm(ex_array)
                         if emb_norm > 0 and ex_norm > 0:
                             similarity = float(np.dot(emb_array, ex_array) / (emb_norm * ex_norm))
-                            if similarity > 0.92:
-                                # If same entity_key, allow update (UPSERT handles it)
-                                if entity_key and existing.entity_key == entity_key:
+                            if similarity > 0.90:
+                                k1 = (existing.entity_key or "").replace("_", ".").lower()
+                                k2 = (entity_key or "").replace("_", ".").lower()
+                                # If same or equivalent entity key (e.g. user.age or user_age)
+                                if k1 and k2 and (k1 == k2 or k1.split(".")[-1] == k2.split(".")[-1]):
+                                    # Normalize to existing key so UPSERT overwrites cleanly
+                                    entity_key = existing.entity_key
                                     break
-                                # Different key or null key but same content — skip
-                                if not entity_key or existing.entity_key != entity_key:
-                                    logger.debug(f"Dedup: skipping near-duplicate (sim={similarity:.3f}): {content[:60]}")
+                                # If exact same content already stored, skip duplicate
+                                if existing.content.strip().lower() == content.strip().lower():
+                                    logger.debug(f"Dedup: exact content already exists: {content[:60]}")
                                     is_duplicate = True
                                     break
                 if is_duplicate:

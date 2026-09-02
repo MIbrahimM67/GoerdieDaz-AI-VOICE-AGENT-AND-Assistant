@@ -100,9 +100,15 @@ export function useWebSocket({ userId, token, onAudioChunk, onBargeIn }) {
         break;
 
       case 'text_response':
+      case 'response.text.delta':
         // Streaming AI text delta
         aiResponseRef.current += msg.delta || '';
         appendAIResponse(msg.delta || '');
+        break;
+
+      case 'memory_updated':
+        // Backend notified a memory was stored or updated
+        window.dispatchEvent(new CustomEvent('memory-updated'));
         break;
 
       case 'state_change':
@@ -123,6 +129,9 @@ export function useWebSocket({ userId, token, onAudioChunk, onBargeIn }) {
           userTranscriptRef.current = '';
           setCurrentTranscript('');
           clearCurrentAIResponse();
+
+          // Refresh memories in Brain HUD immediately
+          window.dispatchEvent(new CustomEvent('memory-updated'));
         }
         break;
 

@@ -882,7 +882,7 @@ class RealtimeSessionHandler:
         """Called for each Groq streaming text delta."""
         self._current_response_text += delta
         await self.send_to_client({
-            "type": "response.text.delta",
+            "type": "text_response",
             "delta": delta,
         })
 
@@ -922,6 +922,7 @@ class RealtimeSessionHandler:
                 importance = float(args.get("importance", 0.7))
                 logger.info(f"[OS Tool] store_fact: {entity_key}")
                 if entity_key and content:
+                    entity_key = entity_key.replace("_", ".")
                     from sqlalchemy import text as sa_text
                     from sqlalchemy.dialects.postgresql import insert as pg_insert
                     from app.models.memory import Memory
@@ -939,8 +940,14 @@ class RealtimeSessionHandler:
                         created_at=datetime.now(timezone.utc),
                         updated_at=datetime.now(timezone.utc),
                     ).on_conflict_do_update(
-                        index_elements=["entity_key", "user_id"],
-                        set_={"content": content, "importance_score": importance, "updated_at": datetime.now(timezone.utc)},
+                        index_elements=["user_id", "entity_key"],
+                        index_where=sa_text("entity_key IS NOT NULL"),
+                        set_={
+                            "content": content,
+                            "importance_score": importance,
+                            "embedding": embedding,
+                            "updated_at": datetime.now(timezone.utc),
+                        },
                     )
                     await self.db.execute(stmt)
                     await self.db.commit()
@@ -1033,6 +1040,19 @@ class RealtimeSessionHandler:
         self._current_user_input = ""
         self._tool_stored_facts_this_turn = False  # Reset for next turn
         self._turn_count += 1
+
+        # Periodic session summary (so current session summary is visible in Brain Panel in real time)
+        if self._turn_count >= 2:
+            try:
+                from app.services.session_summary_service import summarise_session
+                await summarise_session(user_id=self.user_id, session_id=self.session_id, db=self.db)
+            except Exception as e:
+                logger.debug(f"Periodic session summary check: {e}")
+
+        # Signal turn complete to client: transition to idle and notify memory HUD
+        self.voice_state = VoiceState.IDLE
+        await self.send_to_client({"type": "state_change", "state": "idle"})
+        await self.send_to_client({"type": "memory_updated"})
 
     async def initialise_session(self):
         """
