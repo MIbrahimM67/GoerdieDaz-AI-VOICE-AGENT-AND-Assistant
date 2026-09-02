@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # ── ElevenLabs (optional — TTS voice) ─────────────────────────
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = ""
-    elevenlabs_model_id: str = "eleven_v3"
+    elevenlabs_model_id: str = "eleven_flash_v2_5"
     elevenlabs_output_format: str = "pcm_24000"
 
     # ── LangSmith (observability — always on) ─────────────────────
