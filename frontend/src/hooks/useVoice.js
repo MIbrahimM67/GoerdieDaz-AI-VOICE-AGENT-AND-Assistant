@@ -107,22 +107,41 @@ export function useVoice({ sendAudioChunk, sendBargein }) {
 
   // ── Barge-in Detection ────────────────────────────────────
 
+  // ── Barge-in Detection ────────────────────────────────────
+
   const _isSpeaking = useRef(false);
-  const _speechTailRef = useRef(0);
-  const BARGE_IN_THRESHOLD = 0.02; // RMS energy threshold for barge-in
+  const consecutiveSpeechFramesRef = useRef(0);
+  const playbackStartTimeRef = useRef(0);
+  // Speaker audio bleed into laptop mic is ~0.05-0.12 RMS.
+  // Direct human speech into mic is 0.20-0.60 RMS.
+  const BARGE_IN_THRESHOLD = 0.22;
+  const BARGE_IN_CONSECUTIVE_FRAMES = 5; // Must be sustained speech (>100ms), not echo spike
+  const BARGE_IN_GRACE_PERIOD_MS = 1000; // Ignore barge-in for first 1s of playback to avoid onset echo
 
   function _detectBargein(pcm16Buffer, rms) {
-    // Read voiceState from store directly — NOT from closure (which would be stale)
     const currentVoiceState = useAppStore.getState().voiceState;
-    if (currentVoiceState !== 'speaking') return;
+    if (currentVoiceState !== 'speaking') {
+      consecutiveSpeechFramesRef.current = 0;
+      return;
+    }
 
-    if (rms > BARGE_IN_THRESHOLD && !_isSpeaking.current) {
-      _isSpeaking.current = true;
-      console.log('[Voice] Barge-in detected, RMS:', rms.toFixed(4));
-      sendBargein();
-      stopPlayback(); // Immediately stop AI audio
-      useAppStore.getState().setVoiceState('interrupted');
-    } else if (rms <= BARGE_IN_THRESHOLD) {
+    // Grace period: ignore mic energy during the first 1s of AI speaking
+    if (Date.now() - playbackStartTimeRef.current < BARGE_IN_GRACE_PERIOD_MS) {
+      consecutiveSpeechFramesRef.current = 0;
+      return;
+    }
+
+    if (rms > BARGE_IN_THRESHOLD) {
+      consecutiveSpeechFramesRef.current += 1;
+      if (consecutiveSpeechFramesRef.current >= BARGE_IN_CONSECUTIVE_FRAMES && !_isSpeaking.current) {
+        _isSpeaking.current = true;
+        console.log('[Voice] True user barge-in detected, RMS:', rms.toFixed(4));
+        sendBargein();
+        stopPlayback(); // Stop AI audio on genuine user interruption
+        useAppStore.getState().setVoiceState('interrupted');
+      }
+    } else {
+      consecutiveSpeechFramesRef.current = 0;
       _isSpeaking.current = false;
     }
   }
@@ -178,6 +197,11 @@ export function useVoice({ sendAudioChunk, sendBargein }) {
       source.start(startTime);
       nextPlayTimeRef.current = startTime + audioBuffer.duration;
 
+      // Track when playback began for barge-in grace period
+      if (!playbackStartTimeRef.current) {
+        playbackStartTimeRef.current = Date.now();
+      }
+
     } catch (err) {
       console.error('[Voice] Playback error:', err);
     }
@@ -205,18 +229,24 @@ export function useVoice({ sendAudioChunk, sendBargein }) {
     playbackContextRef.current = null;
     gainNodeRef.current = null;
     nextPlayTimeRef.current = 0;
+    playbackStartTimeRef.current = 0;
+    consecutiveSpeechFramesRef.current = 0;
     console.log('[Voice] Playback killed — muted + all sources stopped');
   }, []);
 
   // Unmute when new response starts
   const unmute = useCallback(() => {
     playbackMutedRef.current = false;
+    playbackStartTimeRef.current = 0;
+    consecutiveSpeechFramesRef.current = 0;
   }, []);
 
   // Auto-unmute when server says AI is speaking (new response)
   useEffect(() => {
     if (voiceState === 'speaking') {
       playbackMutedRef.current = false;
+      playbackStartTimeRef.current = 0;
+      consecutiveSpeechFramesRef.current = 0;
     }
   }, [voiceState]);
 

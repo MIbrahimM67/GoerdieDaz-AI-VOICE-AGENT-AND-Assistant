@@ -934,7 +934,7 @@ class RealtimeSessionHandler:
                         memory_type="semantic",
                         importance_score=importance,
                         confidence_score=0.9,
-                        persona_id=self.persona_id,
+                        source_persona_id=self.persona_id,
                         embedding=embedding,
                         created_at=datetime.now(timezone.utc),
                         updated_at=datetime.now(timezone.utc),
