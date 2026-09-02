@@ -92,6 +92,8 @@ class ElevenLabsTTS:
             self._connected = True
 
             # Send initial config (BOS — Beginning of Stream)
+            # chunk_length_schedule: [50] starts audio generation after just 50 chars (~8-10 words)
+            # instead of waiting for 120+ characters. Drastically reduces TTFB.
             bos_message = {
                 "text": " ",
                 "voice_settings": {
@@ -101,7 +103,7 @@ class ElevenLabsTTS:
                     "use_speaker_boost": True,
                 },
                 "generation_config": {
-                    "chunk_length_schedule": [120, 160, 250, 290],
+                    "chunk_length_schedule": [50],
                 },
                 "xi_api_key": self.api_key,
             }

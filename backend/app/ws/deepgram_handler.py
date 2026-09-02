@@ -47,9 +47,9 @@ DEEPGRAM_WS_URL = (
     "&channels=1"
     "&punctuate=true"
     "&smart_format=true"
-    "&endpointing=300"          # 300ms silence = end of utterance
+    "&endpointing=150"          # 150ms silence = end of utterance (snappy response)
     "&interim_results=true"     # Get partial transcripts for barge-in
-    "&utterance_end_ms=1000"    # Finalize after 1s silence
+    "&utterance_end_ms=400"     # Finalize after 400ms silence (was 1000ms)
 )
 
 
@@ -241,7 +241,10 @@ class DeepgramVoiceHandler:
                         continue
 
                     if not is_final:
-                        # Interim result — can use for early barge-in detection
+                        # User is actively speaking — pre-connect ElevenLabs in background
+                        # so the connection is hot and ready the millisecond LLM starts streaming!
+                        if self._elevenlabs_tts and not self._elevenlabs_tts.is_connected:
+                            asyncio.create_task(self._elevenlabs_tts.ensure_connected())
                         continue
 
                     # Final transcript from Deepgram
