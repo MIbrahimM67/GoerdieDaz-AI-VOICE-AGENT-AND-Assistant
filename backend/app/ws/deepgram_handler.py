@@ -47,9 +47,8 @@ DEEPGRAM_WS_URL = (
     "&channels=1"
     "&punctuate=true"
     "&smart_format=true"
-    "&endpointing=150"          # 150ms silence = end of utterance (snappy response)
+    "&endpointing=200"          # 200ms silence = end of utterance (snappy response)
     "&interim_results=true"     # Get partial transcripts for barge-in
-    "&utterance_end_ms=400"     # Finalize after 400ms silence (was 1000ms)
 )
 
 
