@@ -193,7 +193,13 @@ export function useVoice({ sendAudioChunk, sendBargein }) {
       };
 
       const now = ctx.currentTime;
-      const startTime = Math.max(now, nextPlayTimeRef.current);
+      // 120ms jitter buffer cushion when starting or when queue runs dry.
+      // Eliminates gaps, glitches, and mid-sentence stutter across internet packets.
+      const JITTER_BUFFER_LEAD_SEC = 0.12;
+      const startTime = nextPlayTimeRef.current > now
+        ? nextPlayTimeRef.current
+        : (now + JITTER_BUFFER_LEAD_SEC);
+
       source.start(startTime);
       nextPlayTimeRef.current = startTime + audioBuffer.duration;
 

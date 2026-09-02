@@ -300,6 +300,8 @@ class DeepgramVoiceHandler:
 
             tool_calls_acc: dict[int, dict] = {}  # index → accumulated tool call
             response_text = ""
+            tts_buffer = ""
+            SENTENCE_PUNCTUATION = {".", "!", "?", "\n", ";"}
 
             async for chunk in stream:
                 delta = chunk.choices[0].delta if chunk.choices else None
@@ -310,8 +312,16 @@ class DeepgramVoiceHandler:
                 if delta.content:
                     response_text += delta.content
                     await self._on_response_text(delta.content)
+
                     if self._elevenlabs_tts and not self._audio_muted:
-                        await self._elevenlabs_tts.send_text(delta.content)
+                        tts_buffer += delta.content
+                        has_punct = any(p in delta.content for p in SENTENCE_PUNCTUATION)
+                        has_comma = ("," in delta.content or ":" in delta.content) and len(tts_buffer) >= 30
+                        is_long = len(tts_buffer) >= 60 and delta.content.endswith(" ")
+
+                        if has_punct or has_comma or is_long:
+                            await self._elevenlabs_tts.send_text(tts_buffer)
+                            tts_buffer = ""
 
                 # ── Tool call accumulation ──────────────────────────────────
                 if delta.tool_calls:
@@ -331,9 +341,13 @@ class DeepgramVoiceHandler:
                             if tc.function.arguments:
                                 tool_calls_acc[idx]["arguments"] += tc.function.arguments
 
-            # ── Flush ElevenLabs ────────────────────────────────────────────
-            if self._elevenlabs_tts and response_text and not self._audio_muted:
-                await self._elevenlabs_tts.flush()
+            # ── Flush remaining text to ElevenLabs ────────────────────────────
+            if self._elevenlabs_tts and not self._audio_muted:
+                if tts_buffer.strip():
+                    await self._elevenlabs_tts.send_text(tts_buffer)
+                    tts_buffer = ""
+                if response_text and not tool_calls_acc:
+                    await self._elevenlabs_tts.flush()
 
             # ── Process tool calls ──────────────────────────────────────────
             if tool_calls_acc:
@@ -375,19 +389,29 @@ class DeepgramVoiceHandler:
                 stream2 = await self._llm_client.chat.completions.create(
                     model=get_chat_model(),
                     messages=messages2,
-                    max_tokens=200,
+                    max_tokens=150,
                     temperature=0.7,
                     stream=True,
                 )
+                tts_buffer2 = ""
                 async for chunk in stream2:
                     delta = chunk.choices[0].delta if chunk.choices else None
                     if delta and delta.content:
                         response_text += delta.content
                         await self._on_response_text(delta.content)
                         if self._elevenlabs_tts and not self._audio_muted:
-                            await self._elevenlabs_tts.send_text(delta.content)
+                            tts_buffer2 += delta.content
+                            has_punct = any(p in delta.content for p in SENTENCE_PUNCTUATION)
+                            has_comma = ("," in delta.content or ":" in delta.content) and len(tts_buffer2) >= 30
+                            is_long = len(tts_buffer2) >= 60 and delta.content.endswith(" ")
+
+                            if has_punct or has_comma or is_long:
+                                await self._elevenlabs_tts.send_text(tts_buffer2)
+                                tts_buffer2 = ""
 
                 if self._elevenlabs_tts and not self._audio_muted:
+                    if tts_buffer2.strip():
+                        await self._elevenlabs_tts.send_text(tts_buffer2)
                     await self._elevenlabs_tts.flush()
 
             # ── Done ────────────────────────────────────────────────────────

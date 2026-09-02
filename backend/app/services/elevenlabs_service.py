@@ -103,7 +103,7 @@ class ElevenLabsTTS:
                     "use_speaker_boost": True,
                 },
                 "generation_config": {
-                    "chunk_length_schedule": [50],
+                    "chunk_length_schedule": [80, 120, 160],
                 },
                 "xi_api_key": self.api_key,
             }
