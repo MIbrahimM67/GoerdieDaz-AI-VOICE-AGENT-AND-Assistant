@@ -56,6 +56,20 @@ export default function App() {
     if (isAuthenticated) setIsBooting(false);
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    const handleAuthExpired = async () => {
+      console.log('[App] Auth expired detected. Performing silent re-login...');
+      try {
+        await login('geordie@geordiedaz.com', 'GeordieDaz2026!');
+        console.log('[App] Re-login successful, fresh token acquired.');
+      } catch (err) {
+        console.error('[App] Silent re-login failed:', err);
+      }
+    };
+    window.addEventListener('auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('auth-expired', handleAuthExpired);
+  }, [login]);
+
   if (serverState !== 'ready') {
     return (
       <div style={boot}>

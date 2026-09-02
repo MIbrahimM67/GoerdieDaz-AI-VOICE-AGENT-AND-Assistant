@@ -37,8 +37,8 @@ class Settings(BaseSettings):
     # ── JWT ────────────────────────────────────────────────────────
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 15
-    refresh_token_expire_days: int = 7
+    access_token_expire_minutes: int = 10080  # 7 days (prevents mid-session expiration)
+    refresh_token_expire_days: int = 30
 
     # ── Database ───────────────────────────────────────────────────
     database_url: str

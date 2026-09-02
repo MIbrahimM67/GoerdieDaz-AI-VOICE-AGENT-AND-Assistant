@@ -33,6 +33,9 @@ export default function BrainPanel() {
         const data = await res.json();
         setMemories(data.memories || []);
         setLastRefresh(new Date());
+      } else if (res.status === 401) {
+        console.warn('[Brain] 401 Unauthorized, requesting token refresh...');
+        window.dispatchEvent(new CustomEvent('auth-expired'));
       }
     } catch (e) {
       console.warn('[Brain] Failed to fetch memories:', e);

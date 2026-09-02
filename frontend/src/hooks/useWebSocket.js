@@ -65,8 +65,9 @@ export function useWebSocket({ userId, token, onAudioChunk, onBargeIn }) {
 
       if (isUnmountingRef.current) return;
       if (event.code === 4001 || event.code === 4003) {
-        // Auth failure — don't reconnect
-        setError('Session expired. Please log in again.');
+        // Auth failure — auto-refresh token
+        console.warn('[WS] Auth failure (4001/4003), requesting token refresh...');
+        window.dispatchEvent(new CustomEvent('auth-expired'));
         return;
       }
 

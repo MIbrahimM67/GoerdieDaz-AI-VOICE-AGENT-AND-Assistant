@@ -1237,32 +1237,37 @@ class RealtimeSessionHandler:
             # Add same memory tool instructions as initial config
             enhanced_prompt = new_prompt + MEMORY_TOOL_INSTRUCTIONS
 
-            # Full reconnect — the only reliable way to change voice in GA API
-            # In-place session.update with voice change is rejected if audio is present
-            try:
-                await self.send_to_client({"type": "state_change", "state": "reconnecting"})
-
-                # Cancel active response and close OpenAI connection
+            if settings.use_opensource and self._deepgram:
+                # In opensource mode (Deepgram STT + Groq LLM + ElevenLabs TTS):
+                # Simply update the system prompt in the deepgram/groq handler!
+                self._deepgram.system_prompt = enhanced_prompt
+                logger.info(f"Persona switched in opensource mode: user={self.user_id} → {new_persona_id}")
+            else:
+                # Full reconnect — for OpenAI Realtime API mode
                 try:
-                    await self.send_to_openai({"type": "response.cancel"})
-                except Exception:
-                    pass
+                    await self.send_to_client({"type": "state_change", "state": "reconnecting"})
 
-                if self._openai_task and not self._openai_task.done():
-                    self._openai_task.cancel()
-                if self.openai_ws:
+                    # Cancel active response and close OpenAI connection
                     try:
-                        await self.openai_ws.close()
+                        await self.send_to_openai({"type": "response.cancel"})
                     except Exception:
                         pass
 
-                # Reconnect with new voice + instructions
-                await self.connect_to_openai(enhanced_prompt, voice_id, max_tokens)
-                self._openai_task = asyncio.create_task(self._listen_openai())
-                logger.info(f"Persona switched via reconnect: user={self.user_id} → {new_persona_id}")
-            except Exception as e:
-                logger.error(f"Persona switch failed: {e}")
-                await self.send_to_client({"type": "error", "message": f"Persona switch failed: {e}"})
+                    if self._openai_task and not self._openai_task.done():
+                        self._openai_task.cancel()
+                    if self.openai_ws:
+                        try:
+                            await self.openai_ws.close()
+                        except Exception:
+                            pass
+
+                    # Reconnect with new voice + instructions
+                    await self.connect_to_openai(enhanced_prompt, voice_id, max_tokens)
+                    self._openai_task = asyncio.create_task(self._listen_openai())
+                    logger.info(f"Persona switched via reconnect: user={self.user_id} → {new_persona_id}")
+                except Exception as e:
+                    logger.error(f"Persona switch failed: {e}")
+                    await self.send_to_client({"type": "error", "message": f"Persona switch failed: {e}"})
 
             await self.send_to_client({
                 "type": "persona_switched",

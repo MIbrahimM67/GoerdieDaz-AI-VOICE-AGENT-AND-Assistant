@@ -190,8 +190,8 @@ async def write_memory_async(
     4. Embed content + store with vector
     5. Update Redis working memory
     """
-    # Skip extraction if user input has no self-referential or personal indicators
-    lower_user = user_input.lower().strip()
+    # Skip extraction if turn has no self-referential or personal indicators
+    lower_user = turn_text.lower().strip()
     PERSONAL_INDICATORS = {
         "i am", "i'm", "my ", "my.", "my,", "i have", "i live", "i work", 
         "i drive", "remember", "call me", "i bought", "i like", "i love", 
@@ -199,7 +199,7 @@ async def write_memory_async(
     }
     has_personal_fact = any(ind in lower_user for ind in PERSONAL_INDICATORS)
     if not has_personal_fact:
-        logger.info(f"Skipping fact extraction — no personal indicators in '{user_input[:40]}'")
+        logger.info(f"Skipping fact extraction — no personal indicators in '{turn_text[:40]}'")
         return
 
     client = get_llm_client()
