@@ -174,7 +174,7 @@ class DeepgramVoiceHandler:
 
     async def send_audio(self, pcm16_b64: str):
         """Forward PCM16 audio chunk from browser to Deepgram."""
-        if self.deepgram_ws and not self.deepgram_ws.closed:
+        if self.deepgram_ws:
             try:
                 audio_bytes = base64.b64decode(pcm16_b64)
                 await self.deepgram_ws.send(audio_bytes)
