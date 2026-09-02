@@ -97,11 +97,11 @@ class ElevenLabsTTS:
             bos_message = {
                 "text": " ",
                 "voice_settings": {
-                    "stability": 0.70,
+                    "stability": 0.75,
                     "similarity_boost": 0.80,
                     "style": 0.0,
                     "use_speaker_boost": False,
-                    "speed": 0.92,
+                    "speed": 0.90,
                 },
                 "generation_config": {
                     "chunk_length_schedule": [80, 120, 160],
