@@ -1042,14 +1042,6 @@ class RealtimeSessionHandler:
         self._tool_stored_facts_this_turn = False  # Reset for next turn
         self._turn_count += 1
 
-        # Periodic session summary (so current session summary is visible in Brain Panel in real time)
-        if self._turn_count >= 2:
-            try:
-                from app.services.session_summary_service import summarise_session
-                await summarise_session(user_id=self.user_id, session_id=self.session_id, db=self.db)
-            except Exception as e:
-                logger.debug(f"Periodic session summary check: {e}")
-
         # Signal turn complete to client: transition to idle and notify memory HUD
         self.voice_state = VoiceState.IDLE
         await self.send_to_client({"type": "state_change", "state": "idle"})

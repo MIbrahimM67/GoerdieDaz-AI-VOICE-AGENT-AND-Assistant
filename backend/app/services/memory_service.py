@@ -299,7 +299,6 @@ If no personal facts, return {{"facts": []}}."""
                 for existing in existing_memories:
                     if existing.embedding is not None:
                         if isinstance(existing.embedding, str):
-                            import json
                             try:
                                 ex_list = json.loads(existing.embedding)
                             except Exception:
