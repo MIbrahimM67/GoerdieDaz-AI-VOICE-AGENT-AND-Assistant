@@ -73,17 +73,15 @@ def _get_openai_client() -> AsyncOpenAI:
 
 async def _embed_via_jina(text: str) -> list[float]:
     """
-    Call Jina AI embeddings API.
-    Free tier: https://jina.ai — same 1536 dims as OpenAI.
-    Falls back to a zero vector if no Jina key is configured (safe for demo).
+    Call Jina AI embeddings API (jina-embeddings-v3, up to 1024 dims).
+    Zero-pads output to EMBEDDING_DIMENSIONS (1536) to match pgvector column.
+    Padding is consistent so cosine similarity remains valid.
+    Falls back to hash-based pseudo-embedding if no Jina key is set.
     """
     if not settings.jina_api_key:
-        # No Jina key — use a deterministic pseudo-embedding for demo
-        # (memory search won't rank perfectly but won't crash)
         logger.warning("No JINA_API_KEY set — using hash-based pseudo-embedding for demo")
         import hashlib
         h = hashlib.sha256(text.strip().encode()).digest()
-        # Expand 32-byte hash to 1536 floats in [-1, 1]
         seed = list(h) * (1536 // 32 + 1)
         return [(b / 127.5 - 1.0) for b in seed[:1536]]
 
@@ -97,12 +95,18 @@ async def _embed_via_jina(text: str) -> list[float]:
             json={
                 "model": EMBEDDING_MODEL_JINA,
                 "input": [text.strip()],
-                "dimensions": EMBEDDING_DIMENSIONS,
                 "task": "retrieval.passage",
+                # No 'dimensions' param — jina-embeddings-v3 max is 1024
             },
         )
         resp.raise_for_status()
-        return resp.json()["data"][0]["embedding"]
+        embedding = resp.json()["data"][0]["embedding"]
+
+        # Zero-pad to EMBEDDING_DIMENSIONS (1536) to match pgvector column
+        if len(embedding) < EMBEDDING_DIMENSIONS:
+            embedding = embedding + [0.0] * (EMBEDDING_DIMENSIONS - len(embedding))
+
+        return embedding[:EMBEDDING_DIMENSIONS]
 
 
 async def embed_text(text: str) -> list[float]:
