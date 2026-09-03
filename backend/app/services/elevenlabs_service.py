@@ -113,11 +113,11 @@ class ElevenLabsTTS:
             bos_message = {
                 "text": " ",
                 "voice_settings": {
-                    "stability": 0.88,
-                    "similarity_boost": 0.85,
-                    "style": 0.0,
-                    "use_speaker_boost": False,
-                    "speed": 0.90,
+                    "stability": 0.80,          # Slightly lower = more expressive word delivery
+                    "similarity_boost": 0.88,    # High = locks in the voice identity
+                    "style": 0.35,              # Adds deliberate, exaggerated pronunciation
+                    "use_speaker_boost": True,   # Enhances vocal clarity and presence
+                    "speed": 0.82,              # Slower, unhurried Alan Robson cadence
                 },
                 "generation_config": {
                     "chunk_length_schedule": [50, 90, 140],
