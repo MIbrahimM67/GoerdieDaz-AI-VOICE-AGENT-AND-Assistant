@@ -1,7 +1,7 @@
 """
 GeordieDaz — ElevenLabs TTS Streaming Service
 Streams text → ElevenLabs WebSocket → audio chunks back to caller.
-Uses eleven_flash_v2_5 for low-latency conversational TTS (~75ms).
+Uses eleven_multilingual_v2 for accent-faithful, high-fidelity conversational TTS.
 Handles per-utterance lifecycle and reconnection automatically.
 """
 import asyncio
