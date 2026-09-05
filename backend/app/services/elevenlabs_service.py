@@ -113,14 +113,14 @@ class ElevenLabsTTS:
             bos_message = {
                 "text": " ",
                 "voice_settings": {
-                    "stability": 0.80,          # Slightly lower = more expressive word delivery
-                    "similarity_boost": 0.88,    # High = locks in the voice identity
-                    "style": 0.35,              # Adds deliberate, exaggerated pronunciation
-                    "use_speaker_boost": True,   # Enhances vocal clarity and presence
-                    "speed": 0.82,              # Slower, unhurried Alan Robson cadence
+                    "stability": 0.65,          # Warm natural variation (community: 0.55-0.70)
+                    "similarity_boost": 0.82,    # Faithful without artifacts (community: 0.75-0.85)
+                    "style": 0.25,              # Subtle warmth, not dramatic (community: 0.20-0.45)
+                    "use_speaker_boost": False,  # OFF — preserves accent quirks, no latency hit
+                    "speed": 0.90,              # Safe slowdown range (community warns: <0.85 = artifacts)
                 },
                 "generation_config": {
-                    "chunk_length_schedule": [50, 90, 140],
+                    "chunk_length_schedule": [120, 160, 250],  # More context = better accent preservation
                 },
                 "xi_api_key": self.api_key,
             }
